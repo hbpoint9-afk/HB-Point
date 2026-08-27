@@ -1,7 +1,8 @@
 package com.example.ui
 
 import android.app.Activity
-import android.content.pm.ActivityInfo
+import android.content.Intent
+import android.net.Uri
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.animation.*
@@ -19,6 +20,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.VolumeMute
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -27,9 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -42,18 +43,28 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.BloggerPost
+import com.example.data.EpisodeItem
 import com.example.data.MediaItem
+import com.example.data.UserAccount
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+val NeonRed = Color(0xFFEF4444)
+val NeonRedDark = Color(0xFFDC2626)
+val CardDark = Color(0xFF0D0D0D)
+val BorderDark = Color(0xFF1F1F1F)
+val GoldAccent = Color(0xFFFFB300)
 
 // -------------------------------------------------------------
 // 1. LAUNCH SCREEN (Cinematic Intro)
@@ -63,18 +74,15 @@ fun LaunchScreen(
     viewModel: MainViewModel,
     onFinished: () -> Unit
 ) {
-    val coroutineScope = rememberCoroutineScope()
     var startAnimation by remember { mutableStateOf(false) }
 
-    // Sound synthesize on launch
     LaunchedEffect(Unit) {
         viewModel.playLaunchSound()
         startAnimation = true
-        delay(2600) // Beautiful 2.6s cinematic flow
+        delay(2400)
         onFinished()
     }
 
-    // Circular rotating ring states
     val infiniteTransition = rememberInfiniteTransition(label = "neon_rotation")
     val rotationAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -86,14 +94,10 @@ fun LaunchScreen(
         label = "neon_rotation_angle"
     )
 
-    // Crimson neon glow color definitions
-    val neonRed = Color(0xFFEF4444)
-    val neonRedDark = Color(0xFFDC2626)
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(Color.Black)
             .testTag("launch_screen"),
         contentAlignment = Alignment.Center
     ) {
@@ -101,24 +105,21 @@ fun LaunchScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Neon rotating custom geometric circles
             Box(
                 modifier = Modifier
-                    .size(180.dp)
+                    .size(160.dp)
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    // Outer neon glowing solid circle
                     drawCircle(
-                        color = neonRedDark.copy(alpha = 0.2f),
+                        color = NeonRedDark.copy(alpha = 0.2f),
                         radius = size.minDimension / 2f,
                         style = Stroke(width = 8.dp.toPx())
                     )
-                    // Inner dashed rotation ring
                     rotate(rotationAngle) {
                         drawArc(
-                            color = neonRed,
+                            color = NeonRed,
                             startAngle = 0f,
                             sweepAngle = 280f,
                             useCenter = false,
@@ -132,18 +133,16 @@ fun LaunchScreen(
                         )
                     }
                 }
-                // Centered neon inner ring
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = "HB Point Logo Play",
-                    tint = neonRed,
+                    tint = NeonRed,
                     modifier = Modifier.size(54.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Brand head text with intense neon dropshadow
             AnimatedVisibility(
                 visible = startAnimation,
                 enter = fadeIn(animationSpec = tween(1000)) + expandVertically(animationSpec = tween(1000))
@@ -151,21 +150,15 @@ fun LaunchScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "HB POINT",
-                        fontSize = 38.sp,
+                        fontSize = 36.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.White,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.drawBehind {
-                            // Immersive glowing blood red shadow effect
-                            drawRect(
-                                color = Color.Transparent
-                            )
-                        }
+                        textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Unlimited Entertainment",
-                        fontSize = 15.sp,
+                        text = "Cinematic Movies, Anime & Series",
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color.Gray,
                         textAlign = TextAlign.Center
@@ -174,7 +167,6 @@ fun LaunchScreen(
             }
         }
 
-        // Skip / Mute Floating Controls
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -191,40 +183,52 @@ fun LaunchScreen(
                     .size(48.dp)
             ) {
                 Icon(
-                    imageVector = if (isMuted) Icons.Default.VolumeMute else Icons.Default.VolumeUp,
+                    imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeMute else Icons.AutoMirrored.Filled.VolumeUp,
                     contentDescription = "Mute Toggle",
                     tint = Color.White
                 )
             }
             Button(
                 onClick = onFinished,
-                colors = ButtonDefaults.buttonColors(containerColor = neonRed),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.height(48.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = NeonRed),
+                shape = RoundedCornerShape(24.dp)
             ) {
-                Text("SKIP INTRO", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("ENTER", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
 // -------------------------------------------------------------
-// 2. AUTHENTICATION (PIN Gatekeeper Screen)
+// 2. AUTHENTICATION (LOGIN & REGISTRATION SCREEN)
 // -------------------------------------------------------------
 @Composable
 fun AuthScreen(
     viewModel: MainViewModel,
     onLoginSuccess: () -> Unit
 ) {
-    var pinValue by remember { mutableStateOf("") }
-    var loginError by remember { mutableStateOf(false) }
-    val profileName by viewModel.preferences.profileName
-    val neonRed = Color(0xFFEF4444)
+    var isRegisterMode by remember { mutableStateOf(false) }
+
+    // Form inputs
+    var nameInput by remember { mutableStateOf("") }
+    var emailInput by remember { mutableStateOf("") }
+    var passwordInput by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    // Admin Verification Dialog State
+    var showAdminCodeDialog by remember { mutableStateOf(false) }
+    var adminCodeInput by remember { mutableStateOf("") }
+    var adminCodeError by remember { mutableStateOf(false) }
+    var pendingAdminEmail by remember { mutableStateOf("") }
+    var pendingAdminName by remember { mutableStateOf("") }
+
+    var errorMessage by remember { mutableStateOf("") }
+    var successMessage by remember { mutableStateOf("") }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(Color.Black)
             .statusBarsPadding()
             .navigationBarsPadding()
             .testTag("auth_screen"),
@@ -233,428 +237,700 @@ fun AuthScreen(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .widthIn(max = 400.dp)
+                .widthIn(max = 440.dp)
+                .fillMaxWidth()
                 .padding(24.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Circular profile avatar selection
+            // App Branding Header
             Box(
                 modifier = Modifier
-                    .size(110.dp)
+                    .size(80.dp)
                     .clip(CircleShape)
-                    .border(2.dp, neonRed, CircleShape)
+                    .border(2.dp, NeonRed, CircleShape)
                     .background(Color(0xFF141414)),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.img_hbpoint_logo),
-                    contentDescription = "HB Logo",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                Icon(
+                    imageVector = Icons.Default.PlayCircleFilled,
+                    contentDescription = "HB Point Logo",
+                    tint = NeonRed,
+                    modifier = Modifier.size(54.dp)
                 )
             }
+
             Spacer(modifier = Modifier.height(16.dp))
+
             Text(
-                text = "Welcome, $profileName",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
+                text = "HB POINT",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Black,
                 color = Color.White
             )
             Text(
-                text = "Enter profile lock PIN to stream",
-                fontSize = 14.sp,
+                text = if (isRegisterMode) "Create an account to start streaming" else "Sign in to access your entertainment hub",
+                fontSize = 13.sp,
                 color = Color.Gray,
-                modifier = Modifier.padding(vertical = 4.dp)
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Custom PIN Dots Visualizer
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.padding(bottom = 24.dp)
+            // Tab Switcher: Sign In vs Register
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF141414)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                for (i in 0 until 4) {
-                    val active = i < pinValue.length
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp)
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(20.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (active) neonRed else Color(0xFF222222)
-                            )
-                            .border(1.dp, if (active) neonRed else Color.Gray, CircleShape)
-                    )
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (!isRegisterMode) NeonRed else Color.Transparent)
+                            .clickable {
+                                isRegisterMode = false
+                                errorMessage = ""
+                                successMessage = ""
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Sign In",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isRegisterMode) NeonRed else Color.Transparent)
+                            .clickable {
+                                isRegisterMode = true
+                                errorMessage = ""
+                                successMessage = ""
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Register",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             }
 
-            if (loginError) {
-                Text(
-                    text = "Incorrect PIN code. Try again.",
-                    color = neonRed,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-            }
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // High fidelity numerical input keypad
-            val keys = listOf(
-                listOf("1", "2", "3"),
-                listOf("4", "5", "6"),
-                listOf("7", "8", "9"),
-                listOf("Clear", "0", "OK")
-            )
-
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            // Inputs Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CardDark),
+                border = BorderStroke(1.dp, BorderDark),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                for (row in keys) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        for (key in row) {
-                            Box(
-                                modifier = Modifier
-                                    .size(76.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        when (key) {
-                                            "Clear" -> Color(0xFF1E1E1E)
-                                            "OK" -> neonRed
-                                            else -> Color(0xFF141414)
-                                        }
-                                    )
-                                    .clickable {
-                                        loginError = false
-                                        when (key) {
-                                            "Clear" -> {
-                                                if (pinValue.isNotEmpty()) {
-                                                    pinValue = pinValue.dropLast(1)
-                                                }
-                                            }
-                                            "OK" -> {
-                                                if (viewModel.loginWithPin(pinValue)) {
-                                                    onLoginSuccess()
-                                                } else {
-                                                    loginError = true
-                                                    pinValue = ""
-                                                }
-                                            }
-                                            else -> {
-                                                if (pinValue.length < 4) {
-                                                    pinValue += key
-                                                    // Auto trigger login if 4 digits are completed
-                                                    if (pinValue.length == 4) {
-                                                        if (viewModel.loginWithPin(pinValue)) {
-                                                            onLoginSuccess()
-                                                        } else {
-                                                            loginError = true
-                                                            pinValue = ""
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .testTag("keypad_$key"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = key,
-                                    fontSize = if (key.length > 1) 14.sp else 22.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (isRegisterMode) {
+                        // Name Input for Registration
+                        OutlinedTextField(
+                            value = nameInput,
+                            onValueChange = { nameInput = it; errorMessage = "" },
+                            label = { Text("Full Name") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Person, contentDescription = "Name", tint = Color.Gray)
+                            },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = NeonRed,
+                                unfocusedBorderColor = BorderDark
+                            ),
+                            modifier = Modifier.fillMaxWidth().testTag("register_name_input")
+                        )
+                    }
+
+                    // Gmail / Email Input
+                    OutlinedTextField(
+                        value = emailInput,
+                        onValueChange = { emailInput = it; errorMessage = "" },
+                        label = { Text("Gmail / Email Address") },
+                        placeholder = { Text("example@gmail.com") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Email, contentDescription = "Gmail", tint = Color.Gray)
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = NeonRed,
+                            unfocusedBorderColor = BorderDark
+                        ),
+                        modifier = Modifier.fillMaxWidth().testTag("auth_email_input")
+                    )
+
+                    // Password Input
+                    OutlinedTextField(
+                        value = passwordInput,
+                        onValueChange = { passwordInput = it; errorMessage = "" },
+                        label = { Text(if (isRegisterMode) "Create Password" else "Password") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Lock, contentDescription = "Password", tint = Color.Gray)
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = "Toggle Password",
+                                    tint = Color.Gray
                                 )
                             }
-                        }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = NeonRed,
+                            unfocusedBorderColor = BorderDark
+                        ),
+                        modifier = Modifier.fillMaxWidth().testTag("auth_password_input")
+                    )
+
+                    // Error or Success Banner
+                    if (errorMessage.isNotBlank()) {
+                        Text(
+                            text = errorMessage,
+                            color = NeonRed,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    if (successMessage.isNotBlank()) {
+                        Text(
+                            text = successMessage,
+                            color = Color.Green,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    // Action Button
+                    Button(
+                        onClick = {
+                            if (isRegisterMode) {
+                                viewModel.registerUser(
+                                    name = nameInput,
+                                    email = emailInput,
+                                    password = passwordInput
+                                ) { success, msg ->
+                                    if (success) {
+                                        if (msg == "ADMIN_CODE_REQUIRED") {
+                                            pendingAdminEmail = emailInput.trim().lowercase()
+                                            pendingAdminName = nameInput.trim()
+                                            showAdminCodeDialog = true
+                                        } else {
+                                            successMessage = msg
+                                            onLoginSuccess()
+                                        }
+                                    } else {
+                                        errorMessage = msg
+                                    }
+                                }
+                            } else {
+                                viewModel.loginUser(
+                                    email = emailInput,
+                                    password = passwordInput
+                                ) { result ->
+                                    when (result) {
+                                        is AuthResult.Success -> {
+                                            onLoginSuccess()
+                                        }
+                                        is AuthResult.AdminCodeRequired -> {
+                                            pendingAdminEmail = result.email
+                                            pendingAdminName = result.name
+                                            showAdminCodeDialog = true
+                                        }
+                                        is AuthResult.Error -> {
+                                            errorMessage = result.message
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonRed),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("auth_action_button")
+                    ) {
+                        Text(
+                            text = if (isRegisterMode) "REGISTER & ENTER" else "SIGN IN",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color.White
+                        )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Quick member switch helper info
             Text(
-                text = "Default PIN is 1234. Change it in settings.",
-                fontSize = 11.sp,
-                color = Color.DarkGray
+                text = if (isRegisterMode) "Already registered? Switch to Sign In above." else "New here? Switch to Register to create a profile.",
+                fontSize = 12.sp,
+                color = Color.DarkGray,
+                textAlign = TextAlign.Center
             )
+        }
+
+        // -------------------------------------------------------------
+        // ADMIN SECURITY CODE POPUP / DIALOG (Code: 0281)
+        // -------------------------------------------------------------
+        if (showAdminCodeDialog) {
+            Dialog(
+                onDismissRequest = {
+                    showAdminCodeDialog = false
+                    adminCodeInput = ""
+                    adminCodeError = false
+                },
+                properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = false)
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF111111)),
+                    border = BorderStroke(1.5.dp, GoldAccent),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp)
+                        .testTag("admin_code_dialog")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(GoldAccent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AdminPanelSettings,
+                                contentDescription = "Admin Security Shield",
+                                tint = GoldAccent,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+
+                        Text(
+                            text = "Admin Security Code",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Text(
+                            text = "Master Administrator credentials recognized for $pendingAdminEmail.\nEnter your 4-digit Admin Code to unlock.",
+                            fontSize = 12.sp,
+                            color = Color.LightGray,
+                            textAlign = TextAlign.Center
+                        )
+
+                        OutlinedTextField(
+                            value = adminCodeInput,
+                            onValueChange = {
+                                if (it.length <= 4) {
+                                    adminCodeInput = it
+                                    adminCodeError = false
+                                }
+                            },
+                            label = { Text("4-Digit Admin Code") },
+                            placeholder = { Text("••••") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = GoldAccent,
+                                unfocusedBorderColor = BorderDark
+                            ),
+                            modifier = Modifier.fillMaxWidth().testTag("admin_code_input")
+                        )
+
+                        if (adminCodeError) {
+                            Text(
+                                text = "Invalid Admin Code. Please try again.",
+                                color = NeonRed,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    showAdminCodeDialog = false
+                                    adminCodeInput = ""
+                                    adminCodeError = false
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("Cancel", color = Color.Gray)
+                            }
+
+                            Button(
+                                onClick = {
+                                    val verified = viewModel.verifyAdminCode(
+                                        code = adminCodeInput,
+                                        email = pendingAdminEmail,
+                                        name = pendingAdminName
+                                    )
+                                    if (verified) {
+                                        showAdminCodeDialog = false
+                                        onLoginSuccess()
+                                    } else {
+                                        adminCodeError = true
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f).testTag("admin_code_submit")
+                            ) {
+                                Text("VERIFY", color = Color.Black, fontWeight = FontWeight.Black)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 // -------------------------------------------------------------
-// 3. HOME DASHBOARD & MEDIA LISTS
+// 3. HOME DASHBOARD SCREEN
 // -------------------------------------------------------------
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     viewModel: MainViewModel,
     onMediaSelected: (MediaItem) -> Unit
 ) {
     val allMedia by viewModel.allMedia.collectAsState()
-    val filteredMedia by viewModel.filteredMedia.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
+    val profileName by viewModel.preferences.profileName
+    val isAdmin by viewModel.preferences.isAdmin
 
-    val trendingMedia = allMedia.filter { it.isTrending }
-    val tvShows = allMedia.filter { it.type == "TV Show" }
-    val movies = allMedia.filter { it.type == "Movie" }
-    val recentlyAdded = allMedia.filter { it.isRecentlyAdded }
+    val filteredList by viewModel.filteredMedia.collectAsState()
 
-    val categories = listOf("All", "Movie", "TV Show", "Sci-Fi", "Action", "Thriller", "Drama")
+    val featuredItem = remember(allMedia) {
+        allMedia.firstOrNull { it.isTrending } ?: allMedia.firstOrNull()
+    }
+
+    val animeItems = remember(allMedia) {
+        allMedia.filter { it.type.equals("Anime", ignoreCase = true) || it.category.contains("Anime", ignoreCase = true) }
+    }
+
+    val movieItems = remember(allMedia) {
+        allMedia.filter { it.type.equals("Movie", ignoreCase = true) }
+    }
+
+    val tvItems = remember(allMedia) {
+        allMedia.filter { it.type.equals("TV Show", ignoreCase = true) }
+    }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(Color.Black)
+            .statusBarsPadding()
             .testTag("home_screen"),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
-        contentPadding = PaddingValues(bottom = 80.dp)
+        contentPadding = PaddingValues(bottom = 80.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // Hero Cinematic Banner with sliding Carousel
+        // App Top Bar: Profile & Admin Badge
         item {
-            Box(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(340.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Background Cover
-                Image(
-                    painter = painterResource(id = R.drawable.img_hero_banner),
-                    contentDescription = "Cosmic Cinematic Hero Banner",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                // Dark Gradient overlay for text legibility
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.5f),
-                                    Color.Black
-                                )
-                            )
-                        )
-                )
-
-                // Foreground Content
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(20.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .background(Color(0xFFEF4444), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (isAdmin) GoldAccent else NeonRed),
+                        contentAlignment = Alignment.Center
                     ) {
+                        Icon(
+                            imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                            contentDescription = "Profile",
+                            tint = Color.Black,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Column {
                         Text(
-                            text = "TRENDING FEATURED",
-                            fontSize = 10.sp,
+                            text = profileName,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(if (isAdmin) GoldAccent.copy(alpha = 0.2f) else NeonRed.copy(alpha = 0.2f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (isAdmin) "SUPER ADMIN" else "MEMBER",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = if (isAdmin) GoldAccent else NeonRed
+                                )
+                            }
+                        }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "COSMIC PULSE",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "A rich journey through distant soundwaves and glowing neon nebulae.",
-                        fontSize = 13.sp,
-                        color = Color.LightGray,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF141414))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
-                        Button(
-                            onClick = {
-                                val cosmicPulse = allMedia.find { it.title.contains("Cosmic Pulse") }
-                                if (cosmicPulse != null) onMediaSelected(cosmicPulse)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(44.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "Play icon", tint = Color.White)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("STREAM NOW", fontWeight = FontWeight.Bold)
-                        }
-                        Button(
-                            onClick = {
-                                val cosmicPulse = allMedia.find { it.title.contains("Cosmic Pulse") }
-                                if (cosmicPulse != null) {
-                                    viewModel.toggleBookmark(cosmicPulse.id)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF141414)),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(44.dp)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "Add List", tint = Color.White)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("MY LIST", fontWeight = FontWeight.Bold)
-                        }
+                        Text(
+                            text = "HB POINT",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            color = NeonRed
+                        )
                     }
                 }
             }
         }
 
-        // Search Bar and Genres filter Layout
+        // Search Bar
         item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { viewModel.setSearchQuery(it) },
-                    placeholder = { Text("Search title, genre, cast...", color = Color.Gray) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White) },
+                    placeholder = { Text("Search movies, anime, series, genres...", color = Color.Gray, fontSize = 13.sp) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray)
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                            }
+                        }
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color(0xFF0D0D0D),
-                        unfocusedContainerColor = Color(0xFF0D0D0D),
-                        focusedBorderColor = Color(0xFFEF4444),
-                        unfocusedBorderColor = Color(0xFF1F1F1F)
+                        focusedBorderColor = NeonRed,
+                        unfocusedBorderColor = BorderDark,
+                        focusedContainerColor = CardDark,
+                        unfocusedContainerColor = CardDark
                     ),
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("search_field")
+                    modifier = Modifier.fillMaxWidth().testTag("search_field")
                 )
+            }
+        }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Genres Filter Horizontal Scroll Chips
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(categories) { category ->
-                        val active = selectedCategory == category
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (active) Color(0xFFEF4444) else Color(0xFF0D0D0D))
-                                .border(1.dp, if (active) Color(0xFFEF4444) else Color(0xFF1F1F1F), RoundedCornerShape(20.dp))
-                                .clickable { viewModel.setSelectedCategory(category) }
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .testTag("chip_$category"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = category,
-                                color = if (active) Color.White else Color.Gray,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+        // Genre / Category Filter Chips
+        item {
+            val categories = listOf("All", "Anime", "Movies", "TV Shows", "Sci-Fi", "Action", "Thriller")
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(categories) { cat ->
+                    val isSelected = selectedCategory == cat
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (isSelected) NeonRed else CardDark)
+                            .border(1.dp, if (isSelected) NeonRed else BorderDark, RoundedCornerShape(20.dp))
+                            .clickable { viewModel.setSelectedCategory(cat) }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = cat,
+                            color = if (isSelected) Color.White else Color.LightGray,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }
         }
 
-        // Search Results layout (if searching/filtering is active)
-        if (searchQuery.isNotEmpty() || selectedCategory != "All") {
+        // Search Results View if Searching or Filtering
+        if (searchQuery.isNotBlank() || selectedCategory != "All") {
             item {
-                Text(
-                    text = "Search Results (${filteredMedia.size})",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-            if (filteredMedia.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("No matching movies or series found.", color = Color.Gray, fontSize = 14.sp)
-                    }
+                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    Text(
+                        text = "Results (${filteredList.size})",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
-            } else {
-                item {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(filteredMedia) { media ->
-                            MediaThumbnailCard(media, onMediaSelected)
-                        }
+            }
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(filteredList) { media ->
+                        MediaThumbnailCard(media = media, onClick = onMediaSelected)
                     }
                 }
             }
         } else {
-            // Standard lists layout
-            item {
-                MediaRowSection(title = "Trending Content", items = trendingMedia, onMediaSelected = onMediaSelected)
+            // Hero Billboard Banner
+            featuredItem?.let { hero ->
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp)
+                            .padding(horizontal = 20.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { onMediaSelected(hero) }
+                    ) {
+                        AsyncImage(
+                            model = hero.backdropUrl,
+                            contentDescription = hero.title,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            placeholder = painterResource(id = R.drawable.img_hbpoint_logo),
+                            error = painterResource(id = R.drawable.img_hbpoint_logo)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f)),
+                                        startY = 60f
+                                    )
+                                )
+                        )
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(NeonRed)
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text("FEATURED SPOTLIGHT", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                            }
+                            Text(hero.title, fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White)
+                            Text("${hero.releaseYear} • ${hero.category} • ⭐ ${hero.rating}", fontSize = 12.sp, color = Color.LightGray)
+                            Text(hero.description, fontSize = 11.sp, color = Color.Gray, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
             }
-            item {
-                MediaRowSection(title = "TV Shows", items = tvShows, onMediaSelected = onMediaSelected)
+
+            // Anime Showcase Shelf
+            if (animeItems.isNotEmpty()) {
+                item {
+                    MediaSectionShelf(
+                        title = "🔥 Popular & Trending Anime",
+                        subtitle = "Stream & download full episodes in HD",
+                        items = animeItems,
+                        onMediaSelected = onMediaSelected
+                    )
+                }
             }
-            item {
-                MediaRowSection(title = "Blockbuster Movies", items = movies, onMediaSelected = onMediaSelected)
+
+            // Blockbuster Movies Shelf
+            if (movieItems.isNotEmpty()) {
+                item {
+                    MediaSectionShelf(
+                        title = "🎬 Blockbuster Movies",
+                        subtitle = "High-speed multi-server streaming mirrors",
+                        items = movieItems,
+                        onMediaSelected = onMediaSelected
+                    )
+                }
             }
-            item {
-                MediaRowSection(title = "Recently Added", items = recentlyAdded, onMediaSelected = onMediaSelected)
+
+            // TV Series Shelf
+            if (tvItems.isNotEmpty()) {
+                item {
+                    MediaSectionShelf(
+                        title = "📺 Binge-Worthy TV Series",
+                        subtitle = "Seasons and episodes ready for streaming",
+                        items = tvItems,
+                        onMediaSelected = onMediaSelected
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun MediaRowSection(
+fun MediaSectionShelf(
     title: String,
+    subtitle: String,
     items: List<MediaItem>,
     onMediaSelected: (MediaItem) -> Unit
 ) {
-    if (items.isEmpty()) return
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = title,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                text = "SEE ALL",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFEF4444)
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(subtitle, fontSize = 11.sp, color = Color.Gray)
         }
-
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(items) { media ->
-                MediaThumbnailCard(media, onMediaSelected)
+                MediaThumbnailCard(media = media, onClick = onMediaSelected)
             }
         }
     }
@@ -667,11 +943,12 @@ fun MediaThumbnailCard(
 ) {
     Card(
         modifier = Modifier
-            .width(130.dp)
+            .width(136.dp)
             .clickable { onClick(media) }
             .testTag("media_card_${media.id}"),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
-        shape = RoundedCornerShape(8.dp)
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        border = BorderStroke(1.dp, BorderDark),
+        shape = RoundedCornerShape(10.dp)
     ) {
         Column {
             Box {
@@ -680,8 +957,8 @@ fun MediaThumbnailCard(
                     contentDescription = media.title,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
-                        .clip(RoundedCornerShape(8.dp)),
+                        .height(190.dp)
+                        .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)),
                     contentScale = ContentScale.Crop,
                     placeholder = painterResource(id = R.drawable.img_hbpoint_logo),
                     error = painterResource(id = R.drawable.img_hbpoint_logo)
@@ -692,36 +969,53 @@ fun MediaThumbnailCard(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
-                        .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .background(Color.Black.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        Icon(Icons.Default.Star, contentDescription = "Star", tint = Color(0xFFFFB300), modifier = Modifier.size(10.dp))
+                        Icon(Icons.Default.Star, contentDescription = "Rating", tint = GoldAccent, modifier = Modifier.size(10.dp))
                         Text(media.rating, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
+
+                // Type Badge (e.g. Anime / Movie)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(6.dp)
+                        .background(
+                            when (media.type) {
+                                "Anime" -> Color(0xFF8B5CF6)
+                                "TV Show" -> Color(0xFF3B82F6)
+                                else -> NeonRed
+                            },
+                            RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                ) {
+                    Text(media.type.uppercase(), fontSize = 8.sp, fontWeight = FontWeight.Black, color = Color.White)
+                }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = media.title,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-            )
-            Text(
-                text = "${media.releaseYear} • ${media.category}",
-                fontSize = 10.sp,
-                color = Color.Gray,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp)
-            )
+
+            Column(modifier = Modifier.padding(8.dp)) {
+                Text(
+                    text = media.title,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${media.releaseYear} • ${media.fileSize}",
+                    fontSize = 10.sp,
+                    color = Color.Gray,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
@@ -739,18 +1033,24 @@ fun MyListScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(Color.Black)
             .statusBarsPadding()
             .testTag("my_list_screen"),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "My Caching Bookmarks",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-        )
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+            Text(
+                text = "My Watchlist",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = "Saved anime, movies & series for instant access",
+                fontSize = 11.sp,
+                color = Color.Gray
+            )
+        }
 
         if (bookmarkedItems.isEmpty()) {
             Box(
@@ -764,18 +1064,18 @@ fun MyListScreen(
                         imageVector = Icons.Default.BookmarkBorder,
                         contentDescription = "Empty Bookmark",
                         tint = Color.DarkGray,
-                        modifier = Modifier.size(72.dp)
+                        modifier = Modifier.size(64.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Your Watch List is Empty",
+                        text = "Your Watchlist is Empty",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Save series & movies to stream offline instantly on sluggish cell networks.",
+                        text = "Tap the bookmark icon on any movie or anime to save it here.",
                         fontSize = 12.sp,
                         color = Color.Gray,
                         textAlign = TextAlign.Center
@@ -785,7 +1085,7 @@ fun MyListScreen(
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
@@ -799,7 +1099,7 @@ fun MyListScreen(
 }
 
 // -------------------------------------------------------------
-// 5. GOOGLE BLOGGER RSS FEED (NEWS)
+// 5. GOOGLE BLOGGER RSS FEED (NEWS & EDITORIALS)
 // -------------------------------------------------------------
 @Composable
 fun BloggerScreen(viewModel: MainViewModel) {
@@ -809,26 +1109,26 @@ fun BloggerScreen(viewModel: MainViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(Color.Black)
             .statusBarsPadding()
             .testTag("blogger_screen")
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
                 Text(
-                    text = "HB Blogger News",
+                    text = "HB Point News",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
                 Text(
-                    text = "Live feeds from Google Blogger",
+                    text = "Release announcements & updates",
                     fontSize = 11.sp,
                     color = Color.Gray
                 )
@@ -844,7 +1144,7 @@ fun BloggerScreen(viewModel: MainViewModel) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Refresh Feed",
-                    tint = if (syncing) Color.Gray else Color(0xFFEF4444)
+                    tint = if (syncing) Color.Gray else NeonRed
                 )
             }
         }
@@ -854,12 +1154,12 @@ fun BloggerScreen(viewModel: MainViewModel) {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = Color(0xFFEF4444))
+                CircularProgressIndicator(color = NeonRed)
             }
         } else {
             LazyColumn(
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(posts) { post ->
@@ -879,12 +1179,16 @@ fun BloggerNewsCard(post: BloggerPost) {
             .fillMaxWidth()
             .clickable {
                 if (post.url.isNotBlank()) {
-                    uriHandler.openUri(post.url)
+                    try {
+                        uriHandler.openUri(post.url)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
             }
             .testTag("blogger_card_${post.id}"),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
-        border = BorderStroke(1.dp, Color(0xFF1F1F1F)),
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        border = BorderStroke(1.dp, BorderDark),
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -896,37 +1200,34 @@ fun BloggerNewsCard(post: BloggerPost) {
                     model = post.thumbnailUrl,
                     contentDescription = post.title,
                     modifier = Modifier
-                        .size(80.dp)
+                        .size(72.dp)
                         .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop,
-                    placeholder = painterResource(id = R.drawable.img_hbpoint_logo),
-                    error = painterResource(id = R.drawable.img_hbpoint_logo)
+                    contentScale = ContentScale.Crop
                 )
-
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = post.title,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Published by ${post.author} • ${post.published.take(10)}",
+                        text = "${post.published} • ${post.author}",
                         fontSize = 10.sp,
-                        color = Color.Gray
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = post.content,
                 fontSize = 12.sp,
                 color = Color.LightGray,
-                maxLines = 4,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -936,10 +1237,10 @@ fun BloggerNewsCard(post: BloggerPost) {
                 horizontalArrangement = Arrangement.End
             ) {
                 Text(
-                    text = "READ MORE IN BROWSER →",
+                    text = "READ MORE →",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFFEF4444)
+                    color = NeonRed
                 )
             }
         }
@@ -947,7 +1248,7 @@ fun BloggerNewsCard(post: BloggerPost) {
 }
 
 // -------------------------------------------------------------
-// 6. PORTABLE SCREEN PLAYER OVERLAY (DYNAMIC STREAMING PLAYER)
+// 6. STREAMING PLAYER OVERLAY & DETAILS (WITH DOWNLOADS & EPISODES)
 // -------------------------------------------------------------
 @Composable
 fun PlayerOverlay(
@@ -958,26 +1259,14 @@ fun PlayerOverlay(
     val context = LocalContext.current
     val currentUrl by viewModel.currentStreamUrl.collectAsState()
     val serverName by viewModel.currentServerName.collectAsState()
-    var isPlaying by remember { mutableStateOf(false) }
+    val isAdmin by viewModel.preferences.isAdmin
 
-    // Advanced video controls states
-    var screenRatioMode by remember { mutableStateOf("FIT") } // FIT, FILL, STRETCH
-    var showGestureIndicator by remember { mutableStateOf("") } // "-10s" or "+10s"
-    var isCastingConnected by remember { mutableStateOf(false) }
-    var showCastingDialog by remember { mutableStateOf(false) }
+    var screenRatioMode by remember { mutableStateOf("FIT") }
+    var showGestureIndicator by remember { mutableStateOf("") }
+    var showEditDialog by remember { mutableStateOf(false) }
 
-    // Lock Screen to landscape if desired
-    val activity = context as? Activity
-    LaunchedEffect(Unit) {
-        // Optional: lock landscape or keep rotation
-        // activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            // Restore portrait when exiting
-            // activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
+    val episodeList = remember(media.episodes) {
+        media.getEpisodeList()
     }
 
     Box(
@@ -993,36 +1282,39 @@ fun PlayerOverlay(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.6f))
+                    .background(Color.Black.copy(alpha = 0.8f))
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
                     IconButton(onClick = onClose) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close player", tint = Color.White)
                     }
                     Column {
-                        Text(media.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text(media.category, fontSize = 11.sp, color = Color.Gray)
+                        Text(media.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${media.type} • ${media.category}", fontSize = 10.sp, color = Color.Gray)
                     }
                 }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Casting toggle Icon
-                    IconButton(onClick = { showCastingDialog = true }) {
-                        Icon(
-                            imageVector = if (isCastingConnected) Icons.Default.CastConnected else Icons.Default.Cast,
-                            contentDescription = "Chromecast Airplay Selector",
-                            tint = if (isCastingConnected) Color(0xFFEF4444) else Color.White
-                        )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Admin Quick Edit Button
+                    if (isAdmin) {
+                        IconButton(
+                            onClick = { showEditDialog = true },
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(GoldAccent.copy(alpha = 0.2f))
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = "Admin Edit Media", tint = GoldAccent, modifier = Modifier.size(20.dp))
+                        }
                     }
-                    // Aspect ratio controller Icon
+
+                    // Aspect Ratio Button
                     IconButton(
                         onClick = {
                             screenRatioMode = when (screenRatioMode) {
@@ -1037,29 +1329,22 @@ fun PlayerOverlay(
                 }
             }
 
-            // Video Player Container Frame with gestural overlay
+            // Video Player Container Frame
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
+                    .height(230.dp)
                     .background(Color(0xFF070707))
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onDoubleTap = { offset ->
                                 val halfWidth = size.width / 2
-                                if (offset.x < halfWidth) {
-                                    // Rewind double tap (Left half)
-                                    showGestureIndicator = "-10s"
-                                } else {
-                                    // Fastforward double tap (Right half)
-                                    showGestureIndicator = "+10s"
-                                }
+                                showGestureIndicator = if (offset.x < halfWidth) "-10s" else "+10s"
                             }
                         )
                     },
                 contentAlignment = Alignment.Center
             ) {
-                // Wrap a native android video view to load the true MP4 streaming mirrors!
                 if (currentUrl.isNotBlank()) {
                     AndroidView(
                         factory = { ctx ->
@@ -1069,19 +1354,16 @@ fun PlayerOverlay(
                                 setMediaController(mediaController)
                                 setVideoPath(currentUrl)
                                 setOnPreparedListener {
-                                    isPlaying = true
                                     start()
                                 }
                             }
                         },
                         update = { view ->
-                            // Update URL instantly when server changes
                             if (view.tag != currentUrl) {
                                 view.setVideoPath(currentUrl)
                                 view.tag = currentUrl
                                 view.start()
                             }
-                            // Apply screen scaling ratio programmatically
                             when (screenRatioMode) {
                                 "FIT" -> {
                                     view.scaleX = 1.0f
@@ -1100,15 +1382,12 @@ fun PlayerOverlay(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = Color(0xFFEF4444))
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = NeonRed)
                     }
                 }
 
-                // 10s Gesture popup HUD
+                // 10s Gesture HUD
                 if (showGestureIndicator.isNotEmpty()) {
                     LaunchedEffect(showGestureIndicator) {
                         delay(600)
@@ -1126,8 +1405,8 @@ fun PlayerOverlay(
                         ) {
                             Icon(
                                 imageVector = if (showGestureIndicator == "-10s") Icons.Default.Replay10 else Icons.Default.Forward10,
-                                contentDescription = "Fast-forward",
-                                tint = Color(0xFFEF4444)
+                                contentDescription = "Fast forward",
+                                tint = NeonRed
                             )
                             Text(showGestureIndicator, color = Color.White, fontWeight = FontWeight.Bold)
                         }
@@ -1135,16 +1414,16 @@ fun PlayerOverlay(
                 }
             }
 
-            // Media Detail Descriptions, Season selectors & Server picker
+            // Media Detail, Stream Mirror Selectors, Episode List & Download Action
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .background(Color(0xFF000000))
+                    .background(Color.Black)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Title and basic meta tags
+                // Title and Meta tags
                 item {
                     Column {
                         Row(
@@ -1152,12 +1431,12 @@ fun PlayerOverlay(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(media.title, fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White)
+                            Text(media.title, fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White, modifier = Modifier.weight(1f))
                             IconButton(onClick = { viewModel.toggleBookmark(media.id) }) {
                                 Icon(
                                     imageVector = if (media.isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                    contentDescription = "Save Bookmarks",
-                                    tint = if (media.isBookmarked) Color(0xFFEF4444) else Color.White
+                                    contentDescription = "Bookmark",
+                                    tint = if (media.isBookmarked) NeonRed else Color.White
                                 )
                             }
                         }
@@ -1168,21 +1447,61 @@ fun PlayerOverlay(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .background(Color(0xFFEF4444), RoundedCornerShape(4.dp))
+                                    .background(NeonRed, RoundedCornerShape(4.dp))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
-                                Text(media.rating, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text("⭐ ${media.rating}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
                             Text("${media.releaseYear} • ${media.type} • ${media.category}", fontSize = 12.sp, color = Color.Gray)
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFF1E1E1E), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text("Size: ${media.fileSize}", fontSize = 10.sp, color = Color.LightGray)
+                            }
                         }
                     }
                 }
 
-                // MULTI-SERVER STREAM SELECTOR CHIPS
+                // Download Button (Direct link action)
+                item {
+                    Button(
+                        onClick = {
+                            val downloadTarget = if (media.downloadLink.isNotBlank()) media.downloadLink else currentUrl
+                            if (downloadTarget.isNotBlank()) {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadTarget))
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E1E1E)),
+                        border = BorderStroke(1.dp, NeonRed),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("download_button")
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = "Download", tint = NeonRed)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "DOWNLOAD MOVIE (${media.fileSize})",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+
+                // Multi-Server Stream Mirror Chips
                 item {
                     Column {
                         Text(
-                            text = "Stream Servers (Alternate CDN Mirrors)",
+                            text = "Stream Servers / Mirrors",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -1193,65 +1512,158 @@ fun PlayerOverlay(
                             modifier = Modifier.horizontalScroll(rememberScrollState())
                         ) {
                             val servers = media.getServerList()
-                            for (srv in servers) {
-                                val isActive = srv.first == serverName
+                            if (servers.isNotEmpty()) {
+                                for (srv in servers) {
+                                    val isActive = srv.first == serverName
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isActive) NeonRed else CardDark)
+                                            .border(1.dp, if (isActive) NeonRed else BorderDark, RoundedCornerShape(8.dp))
+                                            .clickable { viewModel.selectServer(srv.first, srv.second) }
+                                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isActive) Icons.Default.CheckCircle else Icons.Default.Layers,
+                                                contentDescription = srv.first,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Text(srv.first, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            } else {
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(if (isActive) Color(0xFFEF4444) else Color(0xFF141414))
-                                        .border(1.dp, if (isActive) Color(0xFFEF4444) else Color(0xFF1F1F1F), RoundedCornerShape(8.dp))
-                                        .clickable { viewModel.selectServer(srv.first, srv.second) }
-                                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
+                                        .background(NeonRed)
+                                        .padding(horizontal = 14.dp, vertical = 8.dp)
                                 ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isActive) Icons.Default.CheckCircle else Icons.Default.Layers,
-                                            contentDescription = srv.first,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Text(srv.first, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
+                                    Text("Primary Stream Mirror", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
                 }
 
-                // Season/Episode selector (For TV Shows only)
-                if (media.type == "TV Show") {
+                // Episode List for Anime and TV Shows
+                if (media.type == "Anime" || media.type == "TV Show" || episodeList.isNotEmpty()) {
                     item {
-                        Column {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(
-                                text = "Episodes Selector (Season 1)",
-                                fontSize = 13.sp,
+                                text = "Episodes & Downloads (${if (episodeList.isNotEmpty()) episodeList.size else 3} Episodes)",
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(bottom = 8.dp)
+                                color = Color.White
                             )
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.horizontalScroll(rememberScrollState())
-                            ) {
-                                for (ep in 1..10) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(54.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (ep == 1) Color(0xFFEF4444) else Color(0xFF141414))
-                                            .border(1.dp, if (ep == 1) Color(0xFFEF4444) else Color(0xFF1F1F1F), RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                // Simulated switching link
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text("EP", fontSize = 9.sp, color = Color.Gray)
-                                            Text("$ep", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+                            if (episodeList.isNotEmpty()) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    episodeList.forEachIndexed { index, ep ->
+                                        Card(
+                                            colors = CardDefaults.cardColors(containerColor = CardDark),
+                                            border = BorderStroke(1.dp, BorderDark),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(12.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = ep.title,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White,
+                                                        fontSize = 13.sp
+                                                    )
+                                                    Text(
+                                                        text = "Size: ${ep.size}",
+                                                        fontSize = 10.sp,
+                                                        color = Color.Gray
+                                                    )
+                                                }
+
+                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    // Stream Episode
+                                                    IconButton(
+                                                        onClick = {
+                                                            if (ep.streamUrl.isNotBlank()) {
+                                                                viewModel.selectServer(ep.title, ep.streamUrl)
+                                                            }
+                                                        },
+                                                        modifier = Modifier
+                                                            .size(36.dp)
+                                                            .clip(CircleShape)
+                                                            .background(NeonRed)
+                                                    ) {
+                                                        Icon(Icons.Default.PlayArrow, contentDescription = "Play Episode", tint = Color.White, modifier = Modifier.size(18.dp))
+                                                    }
+
+                                                    // Download Episode
+                                                    IconButton(
+                                                        onClick = {
+                                                            val dl = if (ep.downloadUrl.isNotBlank()) ep.downloadUrl else ep.streamUrl
+                                                            if (dl.isNotBlank()) {
+                                                                try {
+                                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(dl))
+                                                                    context.startActivity(intent)
+                                                                } catch (e: Exception) {
+                                                                    e.printStackTrace()
+                                                                }
+                                                            }
+                                                        },
+                                                        modifier = Modifier
+                                                            .size(36.dp)
+                                                            .clip(CircleShape)
+                                                            .background(Color(0xFF1E1E1E))
+                                                    ) {
+                                                        Icon(Icons.Default.Download, contentDescription = "Download Episode", tint = Color.White, modifier = Modifier.size(18.dp))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Default anime sample episodes
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    listOf("Episode 1: The Beginning", "Episode 2: The Battle", "Episode 3: Climax").forEachIndexed { idx, title ->
+                                        Card(
+                                            colors = CardDefaults.cardColors(containerColor = CardDark),
+                                            border = BorderStroke(1.dp, BorderDark),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(12.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column {
+                                                    Text(title, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+                                                    Text("Size: 350 MB", fontSize = 10.sp, color = Color.Gray)
+                                                }
+                                                IconButton(
+                                                    onClick = {
+                                                        viewModel.selectServer(title, "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4")
+                                                    },
+                                                    modifier = Modifier.size(36.dp).clip(CircleShape).background(NeonRed)
+                                                ) {
+                                                    Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(18.dp))
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1260,10 +1672,10 @@ fun PlayerOverlay(
                     }
                 }
 
-                // Rich Descriptions & Cast tags
+                // Synopsis & Cast
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Synopsis", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Synopsis & Detail", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Text(media.description, fontSize = 13.sp, color = Color.LightGray, lineHeight = 18.sp)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("Starring Cast", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -1272,86 +1684,43 @@ fun PlayerOverlay(
                 }
             }
         }
-    }
 
-    // Dynamic casting dialog selector
-    if (showCastingDialog) {
-        Dialog(onDismissRequest = { showCastingDialog = false }) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
-                border = BorderStroke(1.dp, Color(0xFF1F1F1F)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Icon(Icons.Default.Cast, contentDescription = "Cast logo", tint = Color(0xFFEF4444), modifier = Modifier.size(56.dp))
-                    Text("Select Cast Mirror Destination", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        val devices = listOf("Living Room TV (Chromecast)", "Master Bedroom (AirPlay)", "Family Hub Display", "Direct FireStick Receiver")
-                        for (dev in devices) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF141414))
-                                    .clickable {
-                                        isCastingConnected = true
-                                        showCastingDialog = false
-                                    }
-                                    .padding(14.dp)
-                            ) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.Tv, contentDescription = "TV", tint = Color.Gray, modifier = Modifier.size(20.dp))
-                                    Text(dev, color = Color.White, fontSize = 13.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        // Admin Edit Media Dialog
+        if (showEditDialog) {
+            MediaEditorDialog(
+                viewModel = viewModel,
+                initialMedia = media,
+                onDismiss = { showEditDialog = false }
+            )
         }
     }
 }
 
 // -------------------------------------------------------------
-// 7. MEMBERS & SETTINGS (PROFILING & CURATOR BYPASS ENTRANCE)
+// 7. MEMBERS & SETTINGS SCREEN (EQUAL MEMBERSHIP & ADMIN HUB)
 // -------------------------------------------------------------
 @Composable
 fun SettingsScreen(
     viewModel: MainViewModel,
     onOpenCurator: () -> Unit
 ) {
-    val context = LocalContext.current
     val profileName by viewModel.preferences.profileName
+    val profileEmail by viewModel.preferences.profileEmail
     val isTvMode by viewModel.preferences.isTvMode
     val isAdmin by viewModel.preferences.isAdmin
 
-    var newPinValue by remember { mutableStateOf("") }
-    var curatorPinValue by remember { mutableStateOf("") }
-    var changePinSuccess by remember { mutableStateOf(false) }
-    var curatorSuccess by remember { mutableStateOf(false) }
-
-    val neonRed = Color(0xFFEF4444)
+    var newNameValue by remember { mutableStateOf(profileName) }
+    var saveNameSuccess by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(Color.Black)
             .statusBarsPadding()
             .padding(horizontal = 20.dp)
             .testTag("settings_screen"),
         verticalArrangement = Arrangement.spacedBy(20.dp),
-        contentPadding = PaddingValues(bottom = 80.dp)
+        contentPadding = PaddingValues(bottom = 90.dp)
     ) {
         item {
             Text(
@@ -1363,11 +1732,11 @@ fun SettingsScreen(
             )
         }
 
-        // Beautiful profiling Avatar and membership badge
+        // Member Profile Card (Equal Status)
         item {
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
-                border = BorderStroke(1.dp, Color(0xFF1F1F1F)),
+                colors = CardDefaults.cardColors(containerColor = CardDark),
+                border = BorderStroke(1.dp, if (isAdmin) GoldAccent else BorderDark),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -1378,221 +1747,174 @@ fun SettingsScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(70.dp)
+                            .size(64.dp)
                             .clip(CircleShape)
-                            .border(2.dp, neonRed, CircleShape)
+                            .border(2.dp, if (isAdmin) GoldAccent else NeonRed, CircleShape)
+                            .background(Color(0xFF141414)),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.img_hbpoint_logo),
-                            contentDescription = "HB stream logo",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+                        Icon(
+                            imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                            contentDescription = "Profile",
+                            tint = if (isAdmin) GoldAccent else NeonRed,
+                            modifier = Modifier.size(36.dp)
                         )
                     }
 
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(profileName, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Icon(Icons.Default.Verified, contentDescription = "VIP Badge", tint = Color(0xFFFFB300), modifier = Modifier.size(16.dp))
                         }
-                        Text("Cosmic Platinum VIP Member", fontSize = 11.sp, color = Color(0xFFFFB300), fontWeight = FontWeight.Bold)
-                        Text("Unlimited Speed • Server Mirror Bypass Active", fontSize = 10.sp, color = Color.Gray)
-                    }
-                }
-            }
-        }
-
-        // TV Mode / Layout Customization Switch
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("App Customization", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Tablet TV Mode Layout", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text("Enables sidebar navigation rail for tablets & TV screens.", fontSize = 11.sp, color = Color.Gray)
+                        if (profileEmail.isNotBlank()) {
+                            Text(profileEmail, fontSize = 12.sp, color = Color.Gray)
                         }
-                        Switch(
-                            checked = isTvMode,
-                            onCheckedChange = { viewModel.preferences.setTvMode(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = neonRed,
-                                uncheckedThumbColor = Color.Gray,
-                                uncheckedTrackColor = Color(0xFF1E1E1E)
-                            )
-                        )
-                    }
-                }
-            }
-        }
-
-        // Profile Customizer forms (Change profile name)
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Edit Profile & Lock PIN", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // Profile name field
-                        OutlinedTextField(
-                            value = profileName,
-                            onValueChange = { viewModel.preferences.setProfileName(it) },
-                            label = { Text("Profile Name") },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = neonRed,
-                                unfocusedBorderColor = Color(0xFF1F1F1F)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        // 4 digit Reset PIN
-                        OutlinedTextField(
-                            value = newPinValue,
-                            onValueChange = { if (it.length <= 4) newPinValue = it },
-                            label = { Text("Update 4-Digit Profile PIN") },
-                            placeholder = { Text("Currently: ${viewModel.preferences.getPin()}") },
-                            visualTransformation = PasswordVisualTransformation(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = neonRed,
-                                unfocusedBorderColor = Color(0xFF1F1F1F)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        
-                        Button(
-                            onClick = {
-                                if (newPinValue.length == 4) {
-                                    viewModel.preferences.setPin(newPinValue)
-                                    changePinSuccess = true
-                                    newPinValue = ""
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = neonRed),
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            Text("SAVE PIN", fontWeight = FontWeight.Bold)
-                        }
-
-                        if (changePinSuccess) {
-                            Text("Profile Lock PIN updated successfully!", color = Color.Green, fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Live Admin Curator Gatekeeper Bypass Form
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Curator & Publisher Dashboard Portal", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "Admin bypass PIN is required to add, update, or remove movies and streaming servers.",
+                            text = if (isAdmin) "Super Administrator • Full Control" else "HB Community Member",
                             fontSize = 11.sp,
-                            color = Color.Gray
+                            color = if (isAdmin) GoldAccent else NeonRed,
+                            fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+            }
+        }
 
-                        if (isAdmin) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color(0xFF1E1E1E), RoundedCornerShape(8.dp))
-                                    .padding(12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("CURATOR PRIVILEGES ACTIVE", color = Color(0xFFFFB300), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Button(
-                                        onClick = onOpenCurator,
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB300))
-                                    ) {
-                                        Text("OPEN CURATOR WORKSPACE", color = Color.Black, fontWeight = FontWeight.Black)
-                                    }
-                                }
-                            }
-                        } else {
-                            OutlinedTextField(
-                                value = curatorPinValue,
-                                onValueChange = { curatorPinValue = it },
-                                label = { Text("Enter Curator Admin PIN (8888)") },
-                                visualTransformation = PasswordVisualTransformation(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = neonRed,
-                                    unfocusedBorderColor = Color(0xFF1F1F1F)
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Button(
-                                onClick = {
-                                    if (viewModel.verifyCuratorPin(curatorPinValue)) {
-                                        curatorSuccess = true
-                                        onOpenCurator()
-                                    } else {
-                                        curatorSuccess = false
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = neonRed),
-                                modifier = Modifier.align(Alignment.End)
-                            ) {
-                                Text("VERIFY ADMIN PORTAL", fontWeight = FontWeight.Bold)
-                            }
+        // Admin Command Center Portal (Only for Admins)
+        if (isAdmin) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161205)),
+                    border = BorderStroke(1.5.dp, GoldAccent),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.AdminPanelSettings, contentDescription = "Admin", tint = GoldAccent)
+                            Text("ADMIN CONTROL PANEL", color = GoldAccent, fontWeight = FontWeight.Black, fontSize = 15.sp)
+                        }
+                        Text(
+                            text = "Manage registered members, add & edit movies/anime, configure stream & download links, sizes, and anime episodes.",
+                            fontSize = 12.sp,
+                            color = Color.LightGray
+                        )
+                        Button(
+                            onClick = onOpenCurator,
+                            colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("open_admin_panel_button")
+                        ) {
+                            Text("OPEN ADMIN PANEL", color = Color.Black, fontWeight = FontWeight.Black)
                         }
                     }
                 }
             }
         }
 
-        // Log out profile button
+        // TV Mode Switch
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CardDark),
+                border = BorderStroke(1.dp, BorderDark),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Tablet & TV Rail Layout", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Switch to sidebar navigation for larger screens & tablets.", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Switch(
+                        checked = isTvMode,
+                        onCheckedChange = { viewModel.preferences.setTvMode(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = NeonRed,
+                            uncheckedThumbColor = Color.Gray,
+                            uncheckedTrackColor = Color(0xFF1E1E1E)
+                        )
+                    )
+                }
+            }
+        }
+
+        // Edit Profile Name
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CardDark),
+                border = BorderStroke(1.dp, BorderDark),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Edit Display Name", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    OutlinedTextField(
+                        value = newNameValue,
+                        onValueChange = { newNameValue = it },
+                        label = { Text("Display Name") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = NeonRed,
+                            unfocusedBorderColor = BorderDark
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Button(
+                        onClick = {
+                            if (newNameValue.isNotBlank()) {
+                                viewModel.preferences.setProfileName(newNameValue.trim())
+                                saveNameSuccess = true
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonRed),
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("SAVE NAME", fontWeight = FontWeight.Bold)
+                    }
+
+                    if (saveNameSuccess) {
+                        Text("Name updated successfully!", color = Color.Green, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        // Logout Button
         item {
             Button(
                 onClick = {
-                    viewModel.preferences.setLoggedIn(false)
-                    viewModel.preferences.setAdmin(false)
+                    viewModel.logout()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF141414)),
+                border = BorderStroke(1.dp, BorderDark),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
+                    .testTag("logout_button")
             ) {
-                Icon(Icons.Default.Logout, contentDescription = "Logout", tint = neonRed)
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = NeonRed)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("LOG OUT PROFILE", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("LOG OUT ACCOUNT", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
 // -------------------------------------------------------------
-// 8. LIVE CURATOR PORTAL (ADMIN DASHBOARD)
+// 8. ADMIN PANEL (MANAGE REGISTERED MEMBERS & MOVIES/ANIME CRUD)
 // -------------------------------------------------------------
 @Composable
 fun CuratorScreen(
@@ -1600,37 +1922,41 @@ fun CuratorScreen(
     onBack: () -> Unit
 ) {
     val allMedia by viewModel.allMedia.collectAsState()
+    val allUsers by viewModel.allUsers.collectAsState()
 
-    var title by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf("Movie") } // Movie or TV Show
-    var backdropUrl by remember { mutableStateOf("") }
-    var posterUrl by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var rating by remember { mutableStateOf("9.0") }
-    var releaseYear by remember { mutableStateOf("2026") }
-    var category by remember { mutableStateOf("Action") }
-    var cast by remember { mutableStateOf("") }
-    var trailerLink by remember { mutableStateOf("") }
+    var selectedAdminTab by remember { mutableStateOf(0) } // 0: Registered Members, 1: Media Catalog
+    var mediaTypeFilter by remember { mutableStateOf("All") } // All, Movies, TV Shows, Anime
 
-    // Multi-server forms stream URLs
-    var server1Name by remember { mutableStateOf("Server 1 BollyFast") }
-    var server1Url by remember { mutableStateOf("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4") }
-    var server2Name by remember { mutableStateOf("Server 2 Firedrop") }
-    var server2Url by remember { mutableStateOf("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4") }
-    var server3Name by remember { mutableStateOf("Server 3 HexaPlay") }
-    var server3Url by remember { mutableStateOf("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4") }
+    var memberSearchQuery by remember { mutableStateOf("") }
+    var showAddEditDialog by remember { mutableStateOf(false) }
+    var mediaToEdit by remember { mutableStateOf<MediaItem?>(null) }
+    var mediaToDelete by remember { mutableStateOf<MediaItem?>(null) }
 
-    var saveStatusMsg by remember { mutableStateOf("") }
-    val neonRed = Color(0xFFEF4444)
+    val filteredUsers = remember(allUsers, memberSearchQuery) {
+        if (memberSearchQuery.isBlank()) allUsers
+        else allUsers.filter {
+            it.name.contains(memberSearchQuery, ignoreCase = true) ||
+            it.email.contains(memberSearchQuery, ignoreCase = true)
+        }
+    }
+
+    val filteredMediaList = remember(allMedia, mediaTypeFilter) {
+        when (mediaTypeFilter) {
+            "Movies" -> allMedia.filter { it.type.equals("Movie", ignoreCase = true) }
+            "TV Shows" -> allMedia.filter { it.type.equals("TV Show", ignoreCase = true) }
+            "Anime" -> allMedia.filter { it.type.equals("Anime", ignoreCase = true) || it.category.contains("Anime", ignoreCase = true) }
+            else -> allMedia
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(Color.Black)
             .statusBarsPadding()
-            .testTag("curator_screen")
+            .testTag("admin_panel_screen")
     ) {
-        // Portal Header
+        // Admin Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1639,266 +1965,768 @@ fun CuratorScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back Settings", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Settings", tint = Color.White)
             }
-            Column {
-                Text("HB Curator Workspace", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("Realtime media manager database syncing", fontSize = 11.sp, color = Color(0xFFFFB300))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("HB Admin Command Center", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Icon(Icons.Default.Verified, contentDescription = "Verified Admin", tint = GoldAccent, modifier = Modifier.size(16.dp))
+                }
+                Text("Logged in as: hbpoint9@gmail.com", fontSize = 11.sp, color = GoldAccent)
             }
         }
 
-        // Forms tab and current catalog inventory list side-by-side or scroll layout
-        LazyColumn(
+        // Top Navigation Tabs: Registered Members vs Movie & Anime Manager
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF141414)),
+            shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 32.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            item {
-                Text("1. Publish New Movie or Series", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-
-            // Forms Layout parameters
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = { Text("Cinematic Title *") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    // Type Selectors Option
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(
-                                selected = type == "Movie",
-                                onClick = { type = "Movie" },
-                                colors = RadioButtonDefaults.colors(selectedColor = neonRed)
-                            )
-                            Text("Movie", color = Color.White, fontSize = 14.sp)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(
-                                selected = type == "TV Show",
-                                onClick = { type = "TV Show" },
-                                colors = RadioButtonDefaults.colors(selectedColor = neonRed)
-                            )
-                            Text("TV Show", color = Color.White, fontSize = 14.sp)
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = category,
-                        onValueChange = { category = it },
-                        label = { Text("Genre Category (Action, Sci-Fi, Thriller, Drama)") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
-                        label = { Text("Synopsis Rich Description") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = rating,
-                            onValueChange = { rating = it },
-                            label = { Text("Rating (e.g. 9.1)") },
-                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = releaseYear,
-                            onValueChange = { releaseYear = it },
-                            label = { Text("Release Year") },
-                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = cast,
-                        onValueChange = { cast = it },
-                        label = { Text("Cast starring (comma separated)") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = posterUrl,
-                        onValueChange = { posterUrl = it },
-                        label = { Text("Poster URL (Portrait Image)") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = backdropUrl,
-                        onValueChange = { backdropUrl = it },
-                        label = { Text("Backdrop URL (Landscape Banner)") },
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-
-            // Streaming alternative CDNs Server configurations
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("2. Multi-Server Mirror Configurations", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    
-                    Column(
-                        modifier = Modifier
-                            .background(Color(0xFF0D0D0D), RoundedCornerShape(8.dp))
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // Server 1
-                        Column {
-                            Text("Mirror 1 Stream Link", fontSize = 11.sp, color = Color.Gray)
-                            OutlinedTextField(
-                                value = server1Url,
-                                onValueChange = { server1Url = it },
-                                placeholder = { Text("MP4 or HLS URL Stream link") },
-                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        // Server 2
-                        Column {
-                            Text("Mirror 2 Stream Link", fontSize = 11.sp, color = Color.Gray)
-                            OutlinedTextField(
-                                value = server2Url,
-                                onValueChange = { server2Url = it },
-                                placeholder = { Text("MP4 or HLS URL Stream link") },
-                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        // Server 3
-                        Column {
-                            Text("Mirror 3 Stream Link", fontSize = 11.sp, color = Color.Gray)
-                            OutlinedTextField(
-                                value = server3Url,
-                                onValueChange = { server3Url = it },
-                                placeholder = { Text("MP4 or HLS URL Stream link") },
-                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = neonRed, unfocusedBorderColor = Color(0xFF1F1F1F)),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Submit Button
-            item {
-                Button(
-                    onClick = {
-                        if (title.isBlank()) {
-                            saveStatusMsg = "Title cannot be blank!"
-                        } else {
-                            val serversList = mutableListOf<Pair<String, String>>()
-                            if (server1Url.isNotBlank()) serversList.add(server1Name to server1Url)
-                            if (server2Url.isNotBlank()) serversList.add(server2Name to server2Url)
-                            if (server3Url.isNotBlank()) serversList.add(server3Name to server3Url)
-                            
-                            // fallback server if empty
-                            if (serversList.isEmpty()) {
-                                serversList.add("Direct Mirror" to "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
-                            }
-
-                            viewModel.saveCuratorMedia(
-                                title = title,
-                                type = type,
-                                backdrop = backdropUrl,
-                                poster = posterUrl,
-                                desc = description,
-                                rating = rating,
-                                year = releaseYear,
-                                category = category,
-                                cast = cast,
-                                trailer = trailerLink,
-                                serversList = serversList
-                            )
-
-                            // Reset forms
-                            title = ""
-                            description = ""
-                            cast = ""
-                            posterUrl = ""
-                            backdropUrl = ""
-                            saveStatusMsg = "Successfully published to the persistent stream database!"
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = neonRed),
+            Row(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (selectedAdminTab == 0) GoldAccent else Color.Transparent)
+                        .clickable { selectedAdminTab = 0 }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("PUBLISH CATALOG MEDIA", fontWeight = FontWeight.Black)
+                    Text(
+                        text = "👥 Members (${allUsers.size})",
+                        color = if (selectedAdminTab == 0) Color.Black else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
                 }
 
-                if (saveStatusMsg.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (selectedAdminTab == 1) GoldAccent else Color.Transparent)
+                        .clickable { selectedAdminTab = 1 }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        text = saveStatusMsg,
-                        color = Color.Green,
-                        fontSize = 13.sp,
+                        text = "🎬 Movies & Anime (${allMedia.size})",
+                        color = if (selectedAdminTab == 1) Color.Black else Color.White,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 8.dp)
+                        fontSize = 13.sp
                     )
                 }
             }
+        }
 
-            // Catalog list items to delete/manage
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("3. Manage Media Inventory (${allMedia.size})", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // TAB 1: REGISTERED MEMBERS SECTION
+        if (selectedAdminTab == 0) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Search Member Input
+                OutlinedTextField(
+                    value = memberSearchQuery,
+                    onValueChange = { memberSearchQuery = it },
+                    placeholder = { Text("Search member by name or Gmail...", color = Color.Gray, fontSize = 12.sp) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = GoldAccent,
+                        unfocusedBorderColor = BorderDark,
+                        focusedContainerColor = CardDark,
+                        unfocusedContainerColor = CardDark
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("search_members_input")
+                )
+
+                Text(
+                    text = "Newly Registered Members (${filteredUsers.size})",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                if (filteredUsers.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No registered members found.", color = Color.Gray, fontSize = 14.sp)
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(bottom = 32.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(filteredUsers) { user ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = CardDark),
+                                border = BorderStroke(1.dp, if (user.isAdmin) GoldAccent else BorderDark),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("user_item_${user.id}")
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(CircleShape)
+                                                .background(if (user.isAdmin) GoldAccent else Color(0xFF1F1F1F)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = if (user.isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                                                contentDescription = "User avatar",
+                                                tint = if (user.isAdmin) Color.Black else Color.White,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+
+                                        Column {
+                                            Text(
+                                                text = user.name,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                fontSize = 14.sp
+                                            )
+                                            Text(
+                                                text = user.email,
+                                                fontSize = 12.sp,
+                                                color = Color.LightGray
+                                            )
+                                            Text(
+                                                text = "Joined: ${user.registeredAt}",
+                                                fontSize = 10.sp,
+                                                color = Color.Gray
+                                            )
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (user.isAdmin) GoldAccent.copy(alpha = 0.2f) else NeonRed.copy(alpha = 0.15f))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = if (user.isAdmin) "ADMIN" else "MEMBER",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = if (user.isAdmin) GoldAccent else NeonRed
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
+        }
 
-            items(allMedia) { media ->
+        // TAB 2: MOVIE & ANIME MANAGEMENT (ADD, EDIT, DELETE)
+        if (selectedAdminTab == 1) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Add Media Button & Subfilters
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = {
+                            mediaToEdit = null
+                            showAddEditDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonRed),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.testTag("admin_add_media_button")
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("ADD MOVIE / ANIME", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+
+                    // Filter chips
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("All", "Movies", "Anime").forEach { f ->
+                            val active = mediaTypeFilter == f
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (active) Color(0xFF1F1F1F) else Color.Transparent)
+                                    .border(1.dp, if (active) GoldAccent else BorderDark, RoundedCornerShape(8.dp))
+                                    .clickable { mediaTypeFilter = f }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = f,
+                                    fontSize = 11.sp,
+                                    color = if (active) GoldAccent else Color.Gray,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Media Inventory List
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 32.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(filteredMediaList) { media ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = CardDark),
+                            border = BorderStroke(1.dp, BorderDark),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("admin_media_item_${media.id}")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    AsyncImage(
+                                        model = media.posterUrl,
+                                        contentDescription = media.title,
+                                        modifier = Modifier
+                                            .size(54.dp)
+                                            .clip(RoundedCornerShape(6.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Column {
+                                        Text(
+                                            text = media.title,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${media.type} • ${media.category} • ${media.fileSize}",
+                                            color = Color.LightGray,
+                                            fontSize = 11.sp
+                                        )
+                                        Text(
+                                            text = "⭐ ${media.rating} • ${media.getServerList().size} Mirrors • ${media.getEpisodeList().size} Eps",
+                                            color = Color.Gray,
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    // Edit Button
+                                    IconButton(
+                                        onClick = {
+                                            mediaToEdit = media
+                                            showAddEditDialog = true
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Edit Media", tint = GoldAccent)
+                                    }
+
+                                    // Delete Button
+                                    IconButton(
+                                        onClick = {
+                                            mediaToDelete = media
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Delete Media", tint = NeonRed)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add / Edit Media Full Sheet Dialog
+        if (showAddEditDialog) {
+            MediaEditorDialog(
+                viewModel = viewModel,
+                initialMedia = mediaToEdit,
+                onDismiss = {
+                    showAddEditDialog = false
+                    mediaToEdit = null
+                }
+            )
+        }
+
+        // Delete Media Confirmation Dialog
+        mediaToDelete?.let { item ->
+            AlertDialog(
+                onDismissRequest = { mediaToDelete = null },
+                containerColor = Color(0xFF141414),
+                title = { Text("Delete Media", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = { Text("Are you sure you want to delete '${item.title}' (${item.type}) from the database? This action is permanent.", color = Color.LightGray) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.deleteMediaItem(item.id) {
+                                mediaToDelete = null
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonRed)
+                    ) {
+                        Text("DELETE", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { mediaToDelete = null }) {
+                        Text("CANCEL", color = Color.Gray)
+                    }
+                }
+            )
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// 9. MEDIA EDITOR DIALOG (ADD & EDIT MOVIES, ANIME, EPISODES, STREAMS, SIZES)
+// -------------------------------------------------------------
+@Composable
+fun MediaEditorDialog(
+    viewModel: MainViewModel,
+    initialMedia: MediaItem?,
+    onDismiss: () -> Unit
+) {
+    val isEditing = initialMedia != null
+
+    var title by remember { mutableStateOf(initialMedia?.title ?: "") }
+    var type by remember { mutableStateOf(initialMedia?.type ?: "Movie") } // Movie, TV Show, Anime
+    var category by remember { mutableStateOf(initialMedia?.category ?: if (initialMedia?.type == "Anime") "Anime" else "Action") }
+    var description by remember { mutableStateOf(initialMedia?.description ?: "") }
+    var rating by remember { mutableStateOf(initialMedia?.rating ?: "9.0") }
+    var releaseYear by remember { mutableStateOf(initialMedia?.releaseYear ?: "2026") }
+    var cast by remember { mutableStateOf(initialMedia?.cast ?: "") }
+    var posterUrl by remember { mutableStateOf(initialMedia?.posterUrl ?: "") }
+    var backdropUrl by remember { mutableStateOf(initialMedia?.backdropUrl ?: "") }
+    var trailerLink by remember { mutableStateOf(initialMedia?.trailerLink ?: "") }
+    var downloadLink by remember { mutableStateOf(initialMedia?.downloadLink ?: "") }
+    var fileSize by remember { mutableStateOf(initialMedia?.fileSize ?: "1.4 GB") }
+
+    // Stream servers setup
+    var streamLink1 by remember {
+        mutableStateOf(initialMedia?.getServerList()?.getOrNull(0)?.second ?: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
+    }
+    var streamLink2 by remember {
+        mutableStateOf(initialMedia?.getServerList()?.getOrNull(1)?.second ?: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4")
+    }
+
+    // Anime / Series Episodes setup
+    var episodesRaw by remember { mutableStateOf(initialMedia?.episodes ?: "") }
+
+    // New Episode inputs for Anime
+    var newEpTitle by remember { mutableStateOf("") }
+    var newEpStream by remember { mutableStateOf("") }
+    var newEpDownload by remember { mutableStateOf("") }
+    var newEpSize by remember { mutableStateOf("350 MB") }
+
+    var statusMessage by remember { mutableStateOf("") }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Scaffold(
+            topBar = {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF0D0D0D), RoundedCornerShape(8.dp))
-                        .padding(12.dp),
+                        .background(Color(0xFF0D0D0D))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        AsyncImage(
-                            model = media.posterUrl,
-                            contentDescription = media.title,
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(RoundedCornerShape(4.dp)),
-                            contentScale = ContentScale.Crop,
-                            placeholder = painterResource(id = R.drawable.img_hbpoint_logo),
-                            error = painterResource(id = R.drawable.img_hbpoint_logo)
-                        )
-                        Column {
-                            Text(media.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.dp.value.sp)
-                            Text("${media.type} • ${media.category}", color = Color.Gray, fontSize = 11.sp)
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                         }
+                        Text(
+                            text = if (isEditing) "Edit ${initialMedia?.title}" else "Add New Media / Anime",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.deleteMediaItem(media.id) }
+                    Button(
+                        onClick = {
+                            if (title.isBlank()) {
+                                statusMessage = "Please enter a valid title"
+                                return@Button
+                            }
+
+                            val servers = mutableListOf<String>()
+                            if (streamLink1.isNotBlank()) servers.add("Server 1 BollyFast|$streamLink1")
+                            if (streamLink2.isNotBlank()) servers.add("Server 2 Firedrop|$streamLink2")
+                            val serversSerialized = servers.joinToString(";;")
+
+                            viewModel.saveMedia(
+                                id = initialMedia?.id ?: 0,
+                                title = title,
+                                type = type,
+                                category = category,
+                                poster = posterUrl,
+                                backdrop = backdropUrl,
+                                desc = description,
+                                rating = rating,
+                                year = releaseYear,
+                                cast = cast,
+                                trailer = trailerLink,
+                                streamServers = serversSerialized,
+                                downloadLink = if (downloadLink.isNotBlank()) downloadLink else streamLink1,
+                                fileSize = fileSize,
+                                episodes = episodesRaw,
+                                isTrending = initialMedia?.isTrending ?: true,
+                                onComplete = onDismiss
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonRed),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.testTag("save_media_button")
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = neonRed)
+                        Text(if (isEditing) "SAVE CHANGES" else "PUBLISH", fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            containerColor = Color.Black
+        ) { paddingValues ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 40.dp)
+            ) {
+                if (statusMessage.isNotBlank()) {
+                    item {
+                        Text(statusMessage, color = NeonRed, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+
+                // 1. Basic Media Metadata
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = CardDark),
+                        border = BorderStroke(1.dp, BorderDark),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text("1. Media Identity & Classification", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp)
+
+                            OutlinedTextField(
+                                value = title,
+                                onValueChange = { title = it },
+                                label = { Text("Title *") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                modifier = Modifier.fillMaxWidth().testTag("edit_title_input")
+                            )
+
+                            // Media Type Selector: Movie, TV Show, Anime
+                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                listOf("Movie", "Anime", "TV Show").forEach { t ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(
+                                            selected = type == t,
+                                            onClick = {
+                                                type = t
+                                                if (t == "Anime" && category == "Action") category = "Anime"
+                                            },
+                                            colors = RadioButtonDefaults.colors(selectedColor = NeonRed)
+                                        )
+                                        Text(t, color = Color.White, fontSize = 13.sp)
+                                    }
+                                }
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(
+                                    value = category,
+                                    onValueChange = { category = it },
+                                    label = { Text("Genre / Category") },
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                OutlinedTextField(
+                                    value = rating,
+                                    onValueChange = { rating = it },
+                                    label = { Text("Rating (e.g. 9.4)") },
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(
+                                    value = releaseYear,
+                                    onValueChange = { releaseYear = it },
+                                    label = { Text("Release Year") },
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                OutlinedTextField(
+                                    value = fileSize,
+                                    onValueChange = { fileSize = it },
+                                    label = { Text("Movie Size (e.g. 1.4 GB)") },
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                    modifier = Modifier.weight(1f).testTag("edit_filesize_input")
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = description,
+                                onValueChange = { description = it },
+                                label = { Text("Detail / Synopsis Description") },
+                                minLines = 3,
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                modifier = Modifier.fillMaxWidth().testTag("edit_desc_input")
+                            )
+
+                            OutlinedTextField(
+                                value = cast,
+                                onValueChange = { cast = it },
+                                label = { Text("Cast / Voice Actors") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                // 2. Stream Links & Download Links
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = CardDark),
+                        border = BorderStroke(1.dp, BorderDark),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text("2. Movie Stream Links & Download Mirror", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp)
+
+                            OutlinedTextField(
+                                value = streamLink1,
+                                onValueChange = { streamLink1 = it },
+                                label = { Text("Stream Server 1 (Primary Stream Link)") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                modifier = Modifier.fillMaxWidth().testTag("edit_stream1_input")
+                            )
+
+                            OutlinedTextField(
+                                value = streamLink2,
+                                onValueChange = { streamLink2 = it },
+                                label = { Text("Stream Server 2 (Backup Mirror)") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = downloadLink,
+                                onValueChange = { downloadLink = it },
+                                label = { Text("Download Link (Direct MP4 / MKV link)") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                modifier = Modifier.fillMaxWidth().testTag("edit_download_input")
+                            )
+
+                            OutlinedTextField(
+                                value = posterUrl,
+                                onValueChange = { posterUrl = it },
+                                label = { Text("Poster Image URL") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = backdropUrl,
+                                onValueChange = { backdropUrl = it },
+                                label = { Text("Backdrop Banner URL") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                // 3. Anime / TV Series Episode Manager
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = CardDark),
+                        border = BorderStroke(1.dp, if (type == "Anime") GoldAccent else BorderDark),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "3. Anime / Series Episode Manager",
+                                fontWeight = FontWeight.Bold,
+                                color = if (type == "Anime") GoldAccent else Color.White,
+                                fontSize = 15.sp
+                            )
+                            Text(
+                                text = "Add and manage individual episode stream links, download links, and sizes for Anime & TV Series.",
+                                fontSize = 11.sp,
+                                color = Color.Gray
+                            )
+
+                            // Add New Episode Form
+                            Column(
+                                modifier = Modifier
+                                    .background(Color(0xFF141414), RoundedCornerShape(8.dp))
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("Add Episode", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+
+                                OutlinedTextField(
+                                    value = newEpTitle,
+                                    onValueChange = { newEpTitle = it },
+                                    label = { Text("Episode Title (e.g. Episode 1: Awakening)") },
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                OutlinedTextField(
+                                    value = newEpStream,
+                                    onValueChange = { newEpStream = it },
+                                    label = { Text("Episode Stream URL") },
+                                    placeholder = { Text("https://.../sample.mp4") },
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = newEpDownload,
+                                        onValueChange = { newEpDownload = it },
+                                        label = { Text("Download Link") },
+                                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedTextField(
+                                        value = newEpSize,
+                                        onValueChange = { newEpSize = it },
+                                        label = { Text("Size (e.g. 350 MB)") },
+                                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NeonRed, unfocusedBorderColor = BorderDark),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+
+                                Button(
+                                    onClick = {
+                                        if (newEpTitle.isNotBlank()) {
+                                            val stream = if (newEpStream.isNotBlank()) newEpStream else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+                                            val dl = if (newEpDownload.isNotBlank()) newEpDownload else stream
+                                            val newEntry = "${newEpTitle.trim()}|$stream|$dl|${newEpSize.trim()}"
+                                            episodesRaw = if (episodesRaw.isBlank()) newEntry else "$episodesRaw;;$newEntry"
+                                            newEpTitle = ""
+                                            newEpStream = ""
+                                            newEpDownload = ""
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (type == "Anime") GoldAccent else NeonRed),
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Text("+ ADD EPISODE", color = if (type == "Anime") Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            // Current Episode List
+                            val currentEps = remember(episodesRaw) {
+                                if (episodesRaw.isBlank()) emptyList()
+                                else episodesRaw.split(";;").mapNotNull { entry ->
+                                    val parts = entry.split("|")
+                                    if (parts.isNotEmpty() && parts[0].isNotBlank()) {
+                                        EpisodeItem(
+                                            title = parts[0],
+                                            streamUrl = if (parts.size > 1) parts[1] else "",
+                                            downloadUrl = if (parts.size > 2) parts[2] else "",
+                                            size = if (parts.size > 3) parts[3] else "350 MB"
+                                        )
+                                    } else null
+                                }
+                            }
+
+                            if (currentEps.isNotEmpty()) {
+                                Text("Current Episodes (${currentEps.size}):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    currentEps.forEachIndexed { index, ep ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color(0xFF161616), RoundedCornerShape(6.dp))
+                                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(ep.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                Text("Size: ${ep.size}", color = Color.Gray, fontSize = 10.sp)
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    val epList = episodesRaw.split(";;").toMutableList()
+                                                    if (index < epList.size) {
+                                                        epList.removeAt(index)
+                                                        episodesRaw = epList.joinToString(";;")
+                                                    }
+                                                },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(Icons.Default.Delete, contentDescription = "Delete Episode", tint = NeonRed, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -7,6 +7,7 @@ import com.example.data.AppDatabase
 import com.example.data.BloggerPost
 import com.example.data.MediaItem
 import com.example.data.MediaRepository
+import com.example.data.UserAccount
 import com.example.data.UserPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,10 +19,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+sealed class AuthResult {
+    data class Success(val name: String, val email: String, val isAdmin: Boolean) : AuthResult()
+    data class AdminCodeRequired(val email: String, val name: String) : AuthResult()
+    data class Error(val message: String) : AuthResult()
+}
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AppDatabase.getDatabase(application)
-    private val repository = MediaRepository(application, database.mediaDao())
+    private val repository = MediaRepository(application, database.mediaDao(), database.userDao())
     val preferences = UserPreferences(application)
 
     // Streaming item and player states
@@ -48,6 +55,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val allMedia: StateFlow<List<MediaItem>> = repository.allMedia
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // All registered users for Admin panel
+    val allUsers: StateFlow<List<UserAccount>> = repository.allUsers
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Filtered lists matching search query and category filters
     val filteredMedia: StateFlow<List<MediaItem>> = combine(
         allMedia,
@@ -55,10 +66,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _selectedCategory
     ) { list, query, category ->
         list.filter { item ->
-            val matchesQuery = item.title.contains(query, ignoreCase = true) || 
-                               item.category.contains(query, ignoreCase = true) ||
-                               item.cast.contains(query, ignoreCase = true)
-            val matchesCategory = category == "All" || item.category.equals(category, ignoreCase = true) || item.type.equals(category, ignoreCase = true)
+            val matchesQuery = query.isBlank() ||
+                    item.title.contains(query, ignoreCase = true) ||
+                    item.category.contains(query, ignoreCase = true) ||
+                    item.cast.contains(query, ignoreCase = true) ||
+                    item.type.contains(query, ignoreCase = true)
+
+            val matchesCategory = when (category) {
+                "All" -> true
+                "Movies" -> item.type.equals("Movie", ignoreCase = true)
+                "TV Shows" -> item.type.equals("TV Show", ignoreCase = true)
+                "Anime" -> item.type.equals("Anime", ignoreCase = true) || item.category.contains("Anime", ignoreCase = true)
+                else -> item.category.contains(category, ignoreCase = true) || item.type.equals(category, ignoreCase = true)
+            }
             matchesQuery && matchesCategory
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -74,7 +94,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            // Check and pre-populate local media catalogs
+            // Check and pre-populate local media catalogs and initial users
             repository.checkAndPrepopulate()
             // Sync RSS Blogger feed initially
             syncBlogger()
@@ -100,9 +120,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (servers.isNotEmpty()) {
             _currentStreamUrl.value = servers[0].second
             _currentServerName.value = servers[0].first
+        } else if (item.getEpisodeList().isNotEmpty()) {
+            val firstEp = item.getEpisodeList()[0]
+            _currentStreamUrl.value = firstEp.streamUrl
+            _currentServerName.value = firstEp.title
         } else {
-            _currentStreamUrl.value = ""
-            _currentServerName.value = ""
+            _currentStreamUrl.value = item.downloadLink
+            _currentServerName.value = "Direct Stream"
         }
     }
 
@@ -129,71 +153,175 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isMuted.value = !_isMuted.value
     }
 
-    // PIN profiling log-in flow
-    fun loginWithPin(pin: String): Boolean {
-        val storedPin = preferences.getPin()
-        val success = pin == storedPin
-        if (success) {
-            preferences.setLoggedIn(true)
+    // -------------------------------------------------------------
+    // USER REGISTRATION & LOGIN LOGIC
+    // -------------------------------------------------------------
+    fun registerUser(
+        name: String,
+        email: String,
+        password: String,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        if (name.isBlank() || email.isBlank() || password.isBlank()) {
+            onResult(false, "Please fill in all fields (Name, Gmail, Password)")
+            return
         }
-        return success
+        if (!email.contains("@") || !email.contains(".")) {
+            onResult(false, "Please enter a valid Gmail / Email address")
+            return
+        }
+        if (password.length < 4) {
+            onResult(false, "Password must be at least 4 characters")
+            return
+        }
+
+        viewModelScope.launch {
+            val normalizedEmail = email.trim().lowercase()
+            val isAdminAccount = normalizedEmail == "hbpoint9@gmail.com"
+            val success = repository.registerUser(
+                name = name.trim(),
+                email = normalizedEmail,
+                password = password,
+                isAdmin = isAdminAccount
+            )
+            if (success) {
+                // If the registered user is the designated admin account, require code or log in
+                if (isAdminAccount && password == "@ansh0281") {
+                    onResult(true, "ADMIN_CODE_REQUIRED")
+                } else {
+                    preferences.setLoggedInUser(name = name.trim(), email = normalizedEmail, isAdmin = false)
+                    onResult(true, "Registration successful!")
+                }
+            } else {
+                onResult(false, "This Gmail address is already registered. Please sign in.")
+            }
+        }
     }
 
-    // Admin/Curator methods
-    fun verifyCuratorPin(pin: String): Boolean {
-        val success = pin == "8888" // Curator override PIN
-        if (success) {
-            preferences.setAdmin(true)
+    fun loginUser(
+        email: String,
+        password: String,
+        onResult: (AuthResult) -> Unit
+    ) {
+        if (email.isBlank() || password.isBlank()) {
+            onResult(AuthResult.Error("Please enter both Gmail and Password"))
+            return
         }
-        return success
+
+        val normalizedEmail = email.trim().lowercase()
+
+        // Admin designated check: hbpoint9@gmail.com and @ansh0281
+        if (normalizedEmail == "hbpoint9@gmail.com" && password == "@ansh0281") {
+            onResult(AuthResult.AdminCodeRequired(email = normalizedEmail, name = "Admin HB"))
+            return
+        }
+
+        viewModelScope.launch {
+            val user = repository.authenticateUser(normalizedEmail, password)
+            if (user != null) {
+                if (user.isAdmin || (normalizedEmail == "hbpoint9@gmail.com" && password == "@ansh0281")) {
+                    onResult(AuthResult.AdminCodeRequired(email = user.email, name = user.name))
+                } else {
+                    preferences.setLoggedInUser(name = user.name, email = user.email, isAdmin = false)
+                    onResult(AuthResult.Success(name = user.name, email = user.email, isAdmin = false))
+                }
+            } else {
+                onResult(AuthResult.Error("Invalid Gmail or Password. Please try again or create an account."))
+            }
+        }
     }
 
-    fun saveCuratorMedia(
+    fun verifyAdminCode(code: String, email: String, name: String): Boolean {
+        return if (code.trim() == "0281") {
+            preferences.setLoggedInUser(
+                name = if (name.isNotBlank()) name else "Admin HB",
+                email = if (email.isNotBlank()) email else "hbpoint9@gmail.com",
+                isAdmin = true
+            )
+            true
+        } else {
+            false
+        }
+    }
+
+    fun logout() {
+        preferences.logout()
+        _selectedMedia.value = null
+    }
+
+    // -------------------------------------------------------------
+    // ADMIN MEDIA MANAGEMENT (Add, Edit, Delete Movie/Anime/TV Show)
+    // -------------------------------------------------------------
+    fun saveMedia(
+        id: Int = 0,
         title: String,
-        type: String,
-        backdrop: String,
+        type: String, // Movie, TV Show, Anime
+        category: String,
         poster: String,
+        backdrop: String,
         desc: String,
         rating: String,
         year: String,
-        category: String,
         cast: String,
         trailer: String,
-        serversList: List<Pair<String, String>>
+        streamServers: String,
+        downloadLink: String,
+        fileSize: String,
+        episodes: String,
+        isTrending: Boolean = false,
+        onComplete: () -> Unit = {}
     ) {
         viewModelScope.launch {
-            // Serialize server streams
-            val serversString = serversList.joinToString(";;") { "${it.first}|${it.second}" }
+            val fallbackPoster = when (type) {
+                "Anime" -> "https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=400&q=80"
+                "TV Show" -> "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=400&q=80"
+                else -> "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=400&q=80"
+            }
+            val fallbackBackdrop = when (type) {
+                "Anime" -> "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80"
+                "TV Show" -> "https://images.unsplash.com/photo-1511447333015-45b65e60f6d5?auto=format&fit=crop&w=800&q=80"
+                else -> "https://images.unsplash.com/photo-1539683255143-73a6b838b106?auto=format&fit=crop&w=800&q=80"
+            }
+
             val item = MediaItem(
-                title = title,
+                id = id,
+                title = title.trim(),
                 type = type,
-                backdropUrl = if (backdrop.isNotBlank()) backdrop else "https://images.unsplash.com/photo-1539683255143-73a6b838b106?auto=format&fit=crop&w=800&q=80",
-                posterUrl = if (poster.isNotBlank()) poster else "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=400&q=80",
-                description = desc,
-                rating = if (rating.isNotBlank()) rating else "8.0",
-                releaseYear = if (year.isNotBlank()) year else "2026",
-                category = category,
-                cast = cast,
-                trailerLink = trailer,
-                isRecentlyAdded = true,
-                streamServers = serversString
+                category = if (category.isNotBlank()) category.trim() else if (type == "Anime") "Anime" else "Action",
+                posterUrl = if (poster.isNotBlank()) poster.trim() else fallbackPoster,
+                backdropUrl = if (backdrop.isNotBlank()) backdrop.trim() else fallbackBackdrop,
+                description = if (desc.isNotBlank()) desc.trim() else "No detailed description provided.",
+                rating = if (rating.isNotBlank()) rating.trim() else "9.0",
+                releaseYear = if (year.isNotBlank()) year.trim() else "2026",
+                cast = if (cast.isNotBlank()) cast.trim() else "HB Studios Cast",
+                trailerLink = if (trailer.isNotBlank()) trailer.trim() else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                streamServers = streamServers.trim(),
+                downloadLink = downloadLink.trim(),
+                fileSize = if (fileSize.isNotBlank()) fileSize.trim() else "1.4 GB",
+                episodes = episodes.trim(),
+                isTrending = isTrending,
+                isRecentlyAdded = true
             )
-            repository.insertMedia(item)
+
+            if (id == 0) {
+                repository.insertMedia(item)
+            } else {
+                repository.updateMedia(item)
+                if (_selectedMedia.value?.id == id) {
+                    _selectedMedia.value = item
+                }
+            }
+            onComplete()
         }
     }
 
-    fun updateMediaItem(item: MediaItem) {
-        viewModelScope.launch {
-            repository.updateMedia(item)
-        }
-    }
-
-    fun deleteMediaItem(id: Int) {
+    fun deleteMediaItem(id: Int, onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             repository.deleteMediaById(id)
             if (_selectedMedia.value?.id == id) {
                 _selectedMedia.value = null
             }
+            onComplete()
         }
     }
 
@@ -206,27 +334,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val duration = 2.0 // 2 seconds
                 val numSamples = (duration * sampleRate).toInt()
                 val sample = DoubleArray(numSamples)
-                
+
                 for (i in 0 until numSamples) {
                     val t = i.toDouble() / sampleRate
-                    
+
                     // Low cinematic bass sweep: 50Hz sweeps up to 130Hz
                     val freqBass = 50.0 + (80.0 * (t / duration))
                     val bass = Math.sin(2.0 * Math.PI * freqBass * t) * 0.45
-                    
+
                     // Harmonic chord swells after 0.4s
                     var chord = 0.0
                     if (t > 0.4) {
                         val swellFactor = Math.sin(Math.PI * (t - 0.4) / (duration - 0.4))
                         // Low warm minor/suspended chord (C - Eb - G)
                         chord += Math.sin(2.0 * Math.PI * 130.81 * t) * 0.20 // C3
-                        chord += Math.sin(2.0 * Math.PI * 155.56 * t) * 0.15 // Eb3 (warm minor)
+                        chord += Math.sin(2.0 * Math.PI * 155.56 * t) * 0.15 // Eb3
                         chord += Math.sin(2.0 * Math.PI * 196.00 * t) * 0.12 // G3
                         chord += Math.sin(2.0 * Math.PI * 261.63 * t) * 0.08 // C4
                         chord *= swellFactor
                     }
-                    
-                    // Master envelope to fade in and fade out smoothly (prevent clicks)
+
+                    // Master envelope
                     val envelope = if (t < 0.15) {
                         t / 0.15
                     } else if (t > duration - 0.3) {
@@ -236,12 +364,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     sample[i] = (bass + chord) * envelope
                 }
-                
+
                 val buffer = ShortArray(numSamples)
                 for (i in 0 until numSamples) {
                     buffer[i] = (sample[i] * 32767).toInt().toShort()
                 }
-                
+
                 val audioTrack = android.media.AudioTrack(
                     android.media.AudioManager.STREAM_MUSIC,
                     sampleRate,

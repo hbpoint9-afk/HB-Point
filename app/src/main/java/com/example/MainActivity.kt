@@ -22,14 +22,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.example.data.MediaItem
 import com.example.ui.*
 import com.example.ui.theme.MyApplicationTheme
@@ -38,7 +34,7 @@ enum class AppScreen {
     Launch,
     Auth,
     Dashboard,
-    Curator
+    AdminPanel
 }
 
 enum class DashboardTab {
@@ -62,8 +58,14 @@ class MainActivity : ComponentActivity() {
 
                 val isLoggedIn by viewModel.preferences.isLoggedIn
                 val isTvMode by viewModel.preferences.isTvMode
-
                 val selectedMedia by viewModel.selectedMedia.collectAsState()
+
+                // If user logged out from settings, reactively navigate to Auth
+                LaunchedEffect(isLoggedIn) {
+                    if (!isLoggedIn && currentScreen != AppScreen.Launch) {
+                        currentScreen = AppScreen.Auth
+                    }
+                }
 
                 Box(
                     modifier = Modifier
@@ -77,9 +79,12 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         AppScreen.Auth -> {
-                            AuthScreen(viewModel = viewModel) {
-                                currentScreen = AppScreen.Dashboard
-                            }
+                            AuthScreen(
+                                viewModel = viewModel,
+                                onLoginSuccess = {
+                                    currentScreen = AppScreen.Dashboard
+                                }
+                            )
                         }
                         AppScreen.Dashboard -> {
                             AdaptiveScaffold(
@@ -110,7 +115,7 @@ class MainActivity : ComponentActivity() {
                                             SettingsScreen(
                                                 viewModel = viewModel,
                                                 onOpenCurator = {
-                                                    currentScreen = AppScreen.Curator
+                                                    currentScreen = AppScreen.AdminPanel
                                                 }
                                             )
                                         }
@@ -118,7 +123,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
-                        AppScreen.Curator -> {
+                        AppScreen.AdminPanel -> {
                             CuratorScreen(
                                 viewModel = viewModel,
                                 onBack = {
@@ -131,7 +136,7 @@ class MainActivity : ComponentActivity() {
 
                     // Floating Built-In Streaming Player view overlay
                     AnimatedVisibility(
-                        visible = currentScreen == AppScreen.Dashboard && selectedMedia != null,
+                        visible = (currentScreen == AppScreen.Dashboard || currentScreen == AppScreen.AdminPanel) && selectedMedia != null,
                         enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                     ) {
@@ -348,7 +353,7 @@ fun AdaptiveScaffold(
 }
 
 // -------------------------------------------------------------
-// 9. DEDICATED TV SHOWS & MOVIES CATEGORIZED GRID WITH FILTERS
+// DEDICATED TV SHOWS, MOVIES & ANIME CATEGORIZED GRID WITH FILTERS
 // -------------------------------------------------------------
 @Composable
 fun MediaCatalogGridScreen(
@@ -356,12 +361,13 @@ fun MediaCatalogGridScreen(
     onMediaSelected: (MediaItem) -> Unit
 ) {
     val allMedia by viewModel.allMedia.collectAsState()
-    var selectedFilter by remember { mutableStateOf("All") } // All, Movies, TV Shows
+    var selectedFilter by remember { mutableStateOf("All") } // All, Movies, TV Shows, Anime
 
     val filteredItems = remember(allMedia, selectedFilter) {
         when (selectedFilter) {
-            "Movies" -> allMedia.filter { it.type == "Movie" }
-            "TV Shows" -> allMedia.filter { it.type == "TV Show" }
+            "Movies" -> allMedia.filter { it.type.equals("Movie", ignoreCase = true) }
+            "TV Shows" -> allMedia.filter { it.type.equals("TV Show", ignoreCase = true) }
+            "Anime" -> allMedia.filter { it.type.equals("Anime", ignoreCase = true) || it.category.contains("Anime", ignoreCase = true) }
             else -> allMedia
         }
     }
@@ -371,7 +377,7 @@ fun MediaCatalogGridScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(Color.Black)
             .statusBarsPadding()
             .testTag("catalog_screen"),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -384,20 +390,20 @@ fun MediaCatalogGridScreen(
                 color = Color.White
             )
             Text(
-                text = "Premium categorized movies & TV show mirrors",
+                text = "Premium categorized movies, anime & TV show mirrors",
                 fontSize = 11.sp,
                 color = Color.Gray
             )
         }
 
-        // Subcategory filters (All, Movies, TV Shows)
+        // Subcategory filters (All, Movies, TV Shows, Anime)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            val subFilters = listOf("All", "Movies", "TV Shows")
+            val subFilters = listOf("All", "Movies", "Anime", "TV Shows")
             for (filter in subFilters) {
                 val active = selectedFilter == filter
                 Box(
@@ -406,7 +412,7 @@ fun MediaCatalogGridScreen(
                         .background(if (active) neonRed else Color(0xFF0D0D0D))
                         .border(1.dp, if (active) neonRed else Color(0xFF1F1F1F), RoundedCornerShape(8.dp))
                         .clickable { selectedFilter = filter }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(

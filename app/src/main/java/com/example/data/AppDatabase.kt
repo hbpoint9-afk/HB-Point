@@ -13,6 +13,27 @@ import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+interface UserDao {
+    @Query("SELECT * FROM users ORDER BY id DESC")
+    fun getAllUsers(): Flow<List<UserAccount>>
+
+    @Query("SELECT * FROM users WHERE email = :email LIMIT 1")
+    suspend fun getUserByEmail(email: String): UserAccount?
+
+    @Query("SELECT * FROM users WHERE email = :email AND password = :password LIMIT 1")
+    suspend fun authenticateUser(email: String, password: String): UserAccount?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUser(user: UserAccount): Long
+
+    @Delete
+    suspend fun deleteUser(user: UserAccount)
+
+    @Query("SELECT COUNT(*) FROM users")
+    suspend fun getUserCount(): Int
+}
+
+@Dao
 interface MediaDao {
     @Query("SELECT * FROM media_items ORDER BY id DESC")
     fun getAllMedia(): Flow<List<MediaItem>>
@@ -49,9 +70,14 @@ interface MediaDao {
     suspend fun clearBloggerPosts()
 }
 
-@Database(entities = [MediaItem::class, BloggerPost::class], version = 1, exportSchema = false)
+@Database(
+    entities = [MediaItem::class, BloggerPost::class, UserAccount::class],
+    version = 2,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun mediaDao(): MediaDao
+    abstract fun userDao(): UserDao
 
     companion object {
         @Volatile

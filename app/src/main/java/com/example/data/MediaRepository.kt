@@ -1,23 +1,29 @@
 package com.example.data
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
-import org.json.JSONArray
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-class MediaRepository(private val context: Context, private val mediaDao: MediaDao) {
+class MediaRepository(
+    private val context: Context,
+    private val mediaDao: MediaDao,
+    private val userDao: UserDao
+) {
 
     val allMedia: Flow<List<MediaItem>> = mediaDao.getAllMedia()
     val bookmarkedMedia: Flow<List<MediaItem>> = mediaDao.getBookmarkedMedia()
     val bloggerPosts: Flow<List<BloggerPost>> = mediaDao.getAllBloggerPosts()
+    val allUsers: Flow<List<UserAccount>> = userDao.getAllUsers()
 
     fun getMediaById(id: Int): Flow<MediaItem?> = mediaDao.getMediaById(id)
 
@@ -44,8 +50,62 @@ class MediaRepository(private val context: Context, private val mediaDao: MediaD
         }
     }
 
-    // Initialize database with premium starting catalog if empty
+    // User Authentication & Management methods
+    suspend fun registerUser(name: String, email: String, password: String, isAdmin: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        val existing = userDao.getUserByEmail(email.trim())
+        if (existing != null) {
+            return@withContext false // Email already registered
+        }
+        val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+        val newUser = UserAccount(
+            name = name.trim(),
+            email = email.trim(),
+            password = password,
+            registeredAt = dateFormat.format(Date()),
+            isAdmin = isAdmin
+        )
+        userDao.insertUser(newUser)
+        true
+    }
+
+    suspend fun authenticateUser(email: String, password: String): UserAccount? = withContext(Dispatchers.IO) {
+        userDao.authenticateUser(email.trim(), password)
+    }
+
+    suspend fun getUserByEmail(email: String): UserAccount? = withContext(Dispatchers.IO) {
+        userDao.getUserByEmail(email.trim())
+    }
+
+    // Initialize database with premium starting catalog (Movies, TV Shows, and Anime)
     suspend fun checkAndPrepopulate() = withContext(Dispatchers.IO) {
+        // Pre-populate admin and sample users if empty
+        if (userDao.getUserCount() == 0) {
+            val adminUser = UserAccount(
+                name = "Admin HB",
+                email = "hbpoint9@gmail.com",
+                password = "@ansh0281",
+                registeredAt = "Aug 27, 2026",
+                isAdmin = true
+            )
+            val demoUser = UserAccount(
+                name = "Rahul Sharma",
+                email = "rahul.sharma@gmail.com",
+                password = "password123",
+                registeredAt = "Aug 26, 2026",
+                isAdmin = false
+            )
+            val demoUser2 = UserAccount(
+                name = "Sneha Patel",
+                email = "sneha.patel@gmail.com",
+                password = "password123",
+                registeredAt = "Aug 27, 2026",
+                isAdmin = false
+            )
+            userDao.insertUser(adminUser)
+            userDao.insertUser(demoUser)
+            userDao.insertUser(demoUser2)
+        }
+
         val existing = mediaDao.getAllMedia().first()
         if (existing.isEmpty()) {
             val startingItems = listOf(
@@ -62,7 +122,27 @@ class MediaRepository(private val context: Context, private val mediaDao: MediaD
                     trailerLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
                     isTrending = true,
                     isRecentlyAdded = true,
-                    streamServers = "Server 1 BollyFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4;;Server 3 HexaPlay|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4;;Direct Mirror|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
+                    streamServers = "Server 1 BollyFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4;;Server 3 HexaPlay|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4;;Direct Mirror|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                    downloadLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                    fileSize = "1.8 GB"
+                ),
+                MediaItem(
+                    title = "Demon Blade: Infinity Realm",
+                    type = "Anime",
+                    backdropUrl = "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80",
+                    posterUrl = "https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=400&q=80",
+                    description = "A young demon slayer embarks on a treacherous pilgrimage through the shattered floating castles of the Upper Moons to reclaim his sibling's stolen soul.",
+                    rating = "9.7",
+                    releaseYear = "2026",
+                    category = "Anime",
+                    cast = "Tanjiro, Nezuko, Zenitsu, Inosuke",
+                    trailerLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+                    isTrending = true,
+                    isRecentlyAdded = true,
+                    streamServers = "Server 1 AnimeFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                    downloadLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+                    fileSize = "2.4 GB",
+                    episodes = "Episode 1: Awakening Flame|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4|350 MB;;Episode 2: Shadow Slash|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4|360 MB;;Episode 3: Infinite Castle|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|380 MB"
                 ),
                 MediaItem(
                     title = "Obsidian Dawn",
@@ -77,7 +157,27 @@ class MediaRepository(private val context: Context, private val mediaDao: MediaD
                     trailerLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
                     isTrending = true,
                     isRecentlyAdded = false,
-                    streamServers = "Server 1 BollyFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4;;Direct Mirror|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                    streamServers = "Server 1 BollyFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4;;Direct Mirror|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                    downloadLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+                    fileSize = "1.4 GB"
+                ),
+                MediaItem(
+                    title = "Cyber Ronin 2099",
+                    type = "Anime",
+                    backdropUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80",
+                    posterUrl = "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=400&q=80",
+                    description = "In neon-soaked Neo-Tokyo, a masterless cyborg warrior wields a plasma katana against rogue AI syndicates threatening total digital singularity.",
+                    rating = "9.2",
+                    releaseYear = "2026",
+                    category = "Anime",
+                    cast = "Kenji Sato, Aoi Miyamoto, Kuro",
+                    trailerLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                    isTrending = true,
+                    isRecentlyAdded = true,
+                    streamServers = "Server 1 AnimeFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                    downloadLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                    fileSize = "1.9 GB",
+                    episodes = "Episode 1: The Plasma Katana|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4|400 MB;;Episode 2: Syndicate Matrix|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|410 MB"
                 ),
                 MediaItem(
                     title = "Chronicles of Neon",
@@ -92,7 +192,10 @@ class MediaRepository(private val context: Context, private val mediaDao: MediaD
                     trailerLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
                     isTrending = false,
                     isRecentlyAdded = true,
-                    streamServers = "Server 1 BollyFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4;;Server 3 HexaPlay|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
+                    streamServers = "Server 1 BollyFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4;;Server 3 HexaPlay|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                    downloadLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                    fileSize = "2.2 GB",
+                    episodes = "Episode 1: The Grid Breach|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|450 MB;;Episode 2: Neon Signal|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4|420 MB"
                 ),
                 MediaItem(
                     title = "The Last Galaxy",
@@ -107,22 +210,9 @@ class MediaRepository(private val context: Context, private val mediaDao: MediaD
                     trailerLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
                     isTrending = false,
                     isRecentlyAdded = true,
-                    streamServers = "Server 1 BollyFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4;;Direct Mirror|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
-                ),
-                MediaItem(
-                    title = "Shadow Protocol",
-                    type = "TV Show",
-                    backdropUrl = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80",
-                    posterUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=400&q=80",
-                    description = "An elite cybersecurity agency tracks a mysterious entity that is systematically corrupting global data mirrors. A tense, tech-heavy game of digital cat and mouse.",
-                    rating = "8.5",
-                    releaseYear = "2025",
-                    category = "Thriller",
-                    cast = "Reid Mercer, Aria Lin, Silas Vance",
-                    trailerLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-                    isTrending = true,
-                    isRecentlyAdded = false,
-                    streamServers = "Server 1 BollyFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                    streamServers = "Server 1 BollyFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4;;Direct Mirror|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+                    downloadLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                    fileSize = "1.6 GB"
                 )
             )
             mediaDao.insertAllMedia(startingItems)
@@ -130,7 +220,6 @@ class MediaRepository(private val context: Context, private val mediaDao: MediaD
     }
 
     // Google Blogger API / XML integration fallback
-    // Fetch blogger updates dynamically from a feed URL
     suspend fun syncBloggerFeed(customFeedUrl: String? = null): Result<List<BloggerPost>> = withContext(Dispatchers.IO) {
         try {
             val feedUrlStr = customFeedUrl ?: "https://blogger.googleblog.com/feeds/posts/default?alt=json"
@@ -169,9 +258,9 @@ class MediaRepository(private val context: Context, private val mediaDao: MediaD
                         
                         val authors = entry.optJSONArray("author")
                         val authorName = if (authors != null && authors.length() > 0) {
-                            authors.getJSONObject(0).optJSONObject("name")?.optString("\$t") ?: "HB Curator"
+                            authors.getJSONObject(0).optJSONObject("name")?.optString("\$t") ?: "HB Point Editorial"
                         } else {
-                            "HB Curator"
+                            "HB Point Editorial"
                         }
 
                         val links = entry.optJSONArray("link")
@@ -186,18 +275,15 @@ class MediaRepository(private val context: Context, private val mediaDao: MediaD
                             }
                         }
 
-                        val mediaThumbnail = entry.optJSONObject("media\$thumbnail")
-                        val thumbnailUrl = mediaThumbnail?.optString("url") ?: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=400&q=80"
-
                         posts.add(
                             BloggerPost(
                                 id = id,
                                 title = title,
                                 content = content,
-                                published = published,
+                                published = published.take(10),
                                 author = authorName,
                                 url = postUrl,
-                                thumbnailUrl = thumbnailUrl
+                                thumbnailUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=400&q=80"
                             )
                         )
                     }
@@ -209,40 +295,32 @@ class MediaRepository(private val context: Context, private val mediaDao: MediaD
                     return@withContext Result.success(posts)
                 }
             }
-            throw Exception("Failed to fetch Google Blogger feed. Response code: ${connection.responseCode}")
+            Result.failure(Exception("HTTP error or empty feed"))
         } catch (e: Exception) {
-            // Populate fallback Blogger posts locally if offline or error occurs, ensuring beautiful editorial cards load.
-            val fallbackPosts = listOf(
+            // Local fallback editorial posts if network unavailable
+            val samplePosts = listOf(
                 BloggerPost(
-                    id = "post_fb_1",
-                    title = "HB Point Version 2.0 Released: Multi-Server Integration & 10s Gesture Control",
-                    content = "We are thrilled to launch HB Point 2.0! This release introduces multi-server mirror options (BollyFast, Firedrop, HexaPlay) to bypass local streaming blocks. Our native video player now supports standard pinch zoom/aspect ratio scaling and double tap to seek 10s forward or backward.",
-                    published = "2026-07-16T12:00:00Z",
-                    author = "System Curator",
+                    id = "local_1",
+                    title = "HB Point 2026: Cinematic Masterpieces & Anime Releases",
+                    content = "Discover our newly curated collection of Sci-Fi epics, high-octane blockbusters, and trending anime series with multi-mirror streams and instant downloads.",
+                    published = "2026-08-27",
+                    author = "Editorial Team",
                     url = "https://blogger.googleblog.com",
-                    thumbnailUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=400&q=80"
+                    thumbnailUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=400&q=80"
                 ),
                 BloggerPost(
-                    id = "post_fb_2",
-                    title = "Upcoming Releases: Dark Matter Chronicles, Echoes of Eternity",
-                    content = "Get ready for next week's exclusive premieres! Cosmic Cinematic content curators are uploading highly anticipated episodes of the cyberpunk series 'Echoes of Eternity'. Remember to toggle TV Mode in settings if you're streaming on tablet screens or high-density monitors.",
-                    published = "2026-07-15T15:30:00Z",
-                    author = "Admin Team",
+                    id = "local_2",
+                    title = "Demon Blade: Infinity Realm - Episode Guide & Breakdown",
+                    content = "A deep dive into the latest anime episodes, battle mechanics, sound design, and character arcs of the Infinity Castle arc.",
+                    published = "2026-08-26",
+                    author = "Anime Specialist",
                     url = "https://blogger.googleblog.com",
-                    thumbnailUrl = "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=400&q=80"
-                ),
-                BloggerPost(
-                    id = "post_fb_3",
-                    title = "Optimizing Your Stream: Multi-Server Mirror Toggle Guide",
-                    content = "If you experience buffering while watching 'Cosmic Pulse' or 'Obsidian Dawn', use our multi-server picker below the player. Changing links instantly reconnects to a alternative high-speed CDN without resetting your current playback location.",
-                    published = "2026-07-14T09:15:00Z",
-                    author = "Network Operations",
-                    url = "https://blogger.googleblog.com",
-                    thumbnailUrl = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=400&q=80"
+                    thumbnailUrl = "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=400&q=80"
                 )
             )
-            mediaDao.insertBloggerPosts(fallbackPosts)
-            return@withContext Result.success(fallbackPosts)
+            mediaDao.clearBloggerPosts()
+            mediaDao.insertBloggerPosts(samplePosts)
+            Result.success(samplePosts)
         }
     }
 }

@@ -16,12 +16,28 @@ class UserPreferences(context: Context) {
     private val _isLoggedIn = mutableStateOf(prefs.getBoolean(KEY_LOGGED_IN, false))
     val isLoggedIn: State<Boolean> = _isLoggedIn
 
-    private val _profileName = mutableStateOf(prefs.getString(KEY_PROFILE_NAME, "VIP Member") ?: "VIP Member")
+    private val _profileName = mutableStateOf(prefs.getString(KEY_PROFILE_NAME, "HB Member") ?: "HB Member")
     val profileName: State<String> = _profileName
+
+    private val _profileEmail = mutableStateOf(prefs.getString(KEY_PROFILE_EMAIL, "") ?: "")
+    val profileEmail: State<String> = _profileEmail
 
     fun setTvMode(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_TV_MODE, enabled).apply()
         _isTvMode.value = enabled
+    }
+
+    fun setLoggedInUser(name: String, email: String, isAdmin: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_LOGGED_IN, true)
+            .putBoolean(KEY_IS_ADMIN, isAdmin)
+            .putString(KEY_PROFILE_NAME, name)
+            .putString(KEY_PROFILE_EMAIL, email)
+            .apply()
+        _isLoggedIn.value = true
+        _isAdmin.value = isAdmin
+        _profileName.value = name
+        _profileEmail.value = email
     }
 
     fun setAdmin(enabled: Boolean) {
@@ -29,22 +45,22 @@ class UserPreferences(context: Context) {
         _isAdmin.value = enabled
     }
 
-    fun setLoggedIn(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_LOGGED_IN, enabled).apply()
-        _isLoggedIn.value = enabled
-    }
-
     fun setProfileName(name: String) {
         prefs.edit().putString(KEY_PROFILE_NAME, name).apply()
         _profileName.value = name
     }
 
-    fun getPin(): String {
-        return prefs.getString(KEY_PIN, "1234") ?: "1234"
-    }
-
-    fun setPin(pin: String) {
-        prefs.edit().putString(KEY_PIN, pin).apply()
+    fun logout() {
+        prefs.edit()
+            .putBoolean(KEY_LOGGED_IN, false)
+            .putBoolean(KEY_IS_ADMIN, false)
+            .putString(KEY_PROFILE_NAME, "HB Member")
+            .putString(KEY_PROFILE_EMAIL, "")
+            .apply()
+        _isLoggedIn.value = false
+        _isAdmin.value = false
+        _profileName.value = "HB Member"
+        _profileEmail.value = ""
     }
 
     companion object {
@@ -52,6 +68,6 @@ class UserPreferences(context: Context) {
         private const val KEY_IS_ADMIN = "is_admin"
         private const val KEY_LOGGED_IN = "logged_in"
         private const val KEY_PROFILE_NAME = "profile_name"
-        private const val KEY_PIN = "profile_pin"
+        private const val KEY_PROFILE_EMAIL = "profile_email"
     }
 }
