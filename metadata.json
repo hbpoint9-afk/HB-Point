@@ -1,0 +1,6 @@
+{
+  "name": "HB Point",
+  "description": "Unlimited Entertainment streaming, list caching, and Blogger feed app.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
