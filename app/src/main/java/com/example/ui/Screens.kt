@@ -70,14 +70,15 @@ val GoldAccent = Color(0xFFFFB300)
 @Composable
 fun LaunchScreen(
     viewModel: MainViewModel,
-    onFinished: () -> Unit
+    onFinished: () -> Unit,
+    onOpenAuth: () -> Unit = {}
 ) {
     var startAnimation by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.playLaunchSound()
         startAnimation = true
-        delay(2400)
+        delay(2200)
         onFinished()
     }
 
@@ -170,7 +171,8 @@ fun LaunchScreen(
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 32.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             val isMuted by viewModel.isMuted.collectAsState()
             IconButton(
@@ -189,9 +191,12 @@ fun LaunchScreen(
             Button(
                 onClick = onFinished,
                 colors = ButtonDefaults.buttonColors(containerColor = NeonRed),
-                shape = RoundedCornerShape(24.dp)
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.height(48.dp)
             ) {
-                Text("ENTER", color = Color.White, fontWeight = FontWeight.Bold)
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("ENTER APP", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -203,7 +208,8 @@ fun LaunchScreen(
 @Composable
 fun AuthScreen(
     viewModel: MainViewModel,
-    onLoginSuccess: () -> Unit
+    onLoginSuccess: () -> Unit,
+    onGuestContinue: () -> Unit = onLoginSuccess
 ) {
     var isRegisterMode by remember { mutableStateOf(false) }
 
@@ -483,18 +489,74 @@ fun AuthScreen(
                             color = Color.White
                         )
                     }
+
+                    // Direct 1-Tap Guest Access Bypass
+                    OutlinedButton(
+                        onClick = onGuestContinue,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.LightGray),
+                        border = BorderStroke(1.dp, Color(0xFF2A2A2A)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .testTag("guest_explore_button")
+                    ) {
+                        Icon(Icons.Default.RemoveRedEye, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.LightGray)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "EXPLORE AS GUEST (SKIP LOGIN)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.LightGray
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Quick member switch helper info
-            Text(
-                text = if (isRegisterMode) "Already registered? Switch to Sign In above." else "New here? Switch to Register to create a profile.",
-                fontSize = 12.sp,
-                color = Color.DarkGray,
-                textAlign = TextAlign.Center
-            )
+            // Quick demo test login shortcuts
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Quick Demo / One-Tap Access:",
+                    fontSize = 11.sp,
+                    color = Color.DarkGray
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    SuggestionChip(
+                        onClick = {
+                            emailInput = "hbpoint9@gmail.com"
+                            passwordInput = "@ansh0281"
+                            isRegisterMode = false
+                        },
+                        label = { Text("Admin: hbpoint9@gmail.com", fontSize = 10.sp, color = GoldAccent) },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = Color(0xFF161616)
+                        ),
+                        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f)),
+                        modifier = Modifier.weight(1f)
+                    )
+                    SuggestionChip(
+                        onClick = {
+                            emailInput = "rahul.sharma@gmail.com"
+                            passwordInput = "password123"
+                            isRegisterMode = false
+                        },
+                        label = { Text("User: rahul.sharma", fontSize = 10.sp, color = Color.White) },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = Color(0xFF161616)
+                        ),
+                        border = BorderStroke(1.dp, Color(0xFF333333)),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
         }
 
         // -------------------------------------------------------------
@@ -937,11 +999,11 @@ fun MediaSectionShelf(
 @Composable
 fun MediaThumbnailCard(
     media: MediaItem,
+    modifier: Modifier = Modifier.width(136.dp),
     onClick: (MediaItem) -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .width(136.dp)
+        modifier = modifier
             .clickable { onClick(media) }
             .testTag("media_card_${media.id}"),
         colors = CardDefaults.cardColors(containerColor = CardDark),
@@ -1082,14 +1144,14 @@ fun MyListScreen(
             }
         } else {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Adaptive(minSize = 150.dp),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(bookmarkedItems) { item ->
-                    MediaThumbnailCard(media = item, onClick = onMediaSelected)
+                    MediaThumbnailCard(media = item, modifier = Modifier.fillMaxWidth(), onClick = onMediaSelected)
                 }
             }
         }
@@ -1281,25 +1343,8 @@ fun PlayerOverlay(
             )
             .testTag("player_overlay")
     ) {
-        if (isFullscreen) {
-            // Fullscreen player taking 100% of the screen
-            UniversalStreamingPlayer(
-                rawUrl = currentUrl,
-                title = media.title,
-                modifier = Modifier.fillMaxSize(),
-                screenRatioMode = screenRatioMode,
-                isFullscreen = true,
-                onToggleFullscreen = { isFullscreen = false },
-                onToggleRatio = {
-                    screenRatioMode = when (screenRatioMode) {
-                        "FIT" -> "FILL"
-                        "FILL" -> "STRETCH"
-                        else -> "FIT"
-                    }
-                }
-            )
-        } else {
-            Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (!isFullscreen) {
                 // Player Top Header Bar
                 Row(
                     modifier = Modifier
@@ -1350,35 +1395,35 @@ fun PlayerOverlay(
                         }
                     }
                 }
+            }
 
-                // Universal Video Player Container Frame (ExoPlayer + BunnyStream & Embed HTML5 Web Engine)
-                UniversalStreamingPlayer(
-                    rawUrl = currentUrl,
-                    title = media.title,
+            // Universal Video Player Container Frame (ExoPlayer + BunnyStream & Embed HTML5 Web Engine)
+            UniversalStreamingPlayer(
+                rawUrl = currentUrl,
+                title = media.title,
+                modifier = if (isFullscreen) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height(230.dp),
+                screenRatioMode = screenRatioMode,
+                isFullscreen = isFullscreen,
+                onToggleFullscreen = { isFullscreen = !isFullscreen },
+                onToggleRatio = {
+                    screenRatioMode = when (screenRatioMode) {
+                        "FIT" -> "FILL"
+                        "FILL" -> "STRETCH"
+                        else -> "FIT"
+                    }
+                }
+            )
+
+            if (!isFullscreen) {
+                // Media Detail, Stream Mirror Selectors, Episode List & Download Action
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(230.dp),
-                    screenRatioMode = screenRatioMode,
-                    isFullscreen = false,
-                    onToggleFullscreen = { isFullscreen = true },
-                    onToggleRatio = {
-                        screenRatioMode = when (screenRatioMode) {
-                            "FIT" -> "FILL"
-                            "FILL" -> "STRETCH"
-                            else -> "FIT"
-                        }
-                    }
-                )
-
-                // Media Detail, Stream Mirror Selectors, Episode List & Download Action
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .background(Color.Black)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+                        .weight(1f)
+                        .background(Color.Black)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                 // Title and Meta tags
                 item {
                     Column {
@@ -1641,6 +1686,7 @@ fun PlayerOverlay(
             }
         }
     }
+}
 
     // Admin Edit Media Dialog
     if (showEditDialog) {
@@ -1650,7 +1696,6 @@ fun PlayerOverlay(
             onDismiss = { showEditDialog = false }
         )
     }
-}
 }
 
 // -------------------------------------------------------------
@@ -2313,6 +2358,10 @@ fun MediaEditorDialog(
     var newEpDownload by remember { mutableStateOf("") }
     var newEpSize by remember { mutableStateOf("350 MB") }
 
+    // State for editing an existing episode
+    var editingEpIndex by remember { mutableStateOf<Int?>(null) }
+    var editingEpItem by remember { mutableStateOf<EpisodeItem?>(null) }
+
     var statusMessage by remember { mutableStateOf("") }
 
     Dialog(
@@ -2666,20 +2715,53 @@ fun MediaEditorDialog(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Column(modifier = Modifier.weight(1f)) {
-                                                Text(ep.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                                Text("Size: ${ep.size}", color = Color.Gray, fontSize = 10.sp)
-                                            }
-                                            IconButton(
-                                                onClick = {
-                                                    val epList = episodesRaw.split(";;").toMutableList()
-                                                    if (index < epList.size) {
-                                                        epList.removeAt(index)
-                                                        episodesRaw = epList.joinToString(";;")
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    Surface(
+                                                        color = if (type == "Anime") GoldAccent.copy(alpha = 0.2f) else NeonRed.copy(alpha = 0.2f),
+                                                        shape = RoundedCornerShape(4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "#${index + 1}",
+                                                            color = if (type == "Anime") GoldAccent else NeonRed,
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                        )
                                                     }
-                                                },
-                                                modifier = Modifier.size(28.dp)
-                                            ) {
-                                                Icon(Icons.Default.Delete, contentDescription = "Delete Episode", tint = NeonRed, modifier = Modifier.size(16.dp))
+                                                    Text(ep.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                }
+                                                Text("Size: ${ep.size} • Link: ${ep.streamUrl.take(25)}...", color = Color.Gray, fontSize = 10.sp, maxLines = 1)
+                                            }
+
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                // Edit Episode Button
+                                                IconButton(
+                                                    onClick = {
+                                                        editingEpIndex = index
+                                                        editingEpItem = ep
+                                                    },
+                                                    modifier = Modifier
+                                                        .size(32.dp)
+                                                        .background(GoldAccent.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                                                ) {
+                                                    Icon(Icons.Default.Edit, contentDescription = "Edit Episode", tint = GoldAccent, modifier = Modifier.size(16.dp))
+                                                }
+
+                                                // Delete Episode Button
+                                                IconButton(
+                                                    onClick = {
+                                                        val epList = episodesRaw.split(";;").toMutableList()
+                                                        if (index < epList.size) {
+                                                            epList.removeAt(index)
+                                                            episodesRaw = epList.joinToString(";;")
+                                                        }
+                                                    },
+                                                    modifier = Modifier
+                                                        .size(32.dp)
+                                                        .background(NeonRed.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                                                ) {
+                                                    Icon(Icons.Default.Delete, contentDescription = "Delete Episode", tint = NeonRed, modifier = Modifier.size(16.dp))
+                                                }
                                             }
                                         }
                                     }
@@ -2690,5 +2772,139 @@ fun MediaEditorDialog(
                 }
             }
         }
+
+        // Sub-dialog to edit selected existing episode
+        if (editingEpItem != null && editingEpIndex != null) {
+            EpisodeEditDialog(
+                initialEpisode = editingEpItem!!,
+                index = editingEpIndex!!,
+                onSave = { updated: EpisodeItem ->
+                    val epList = episodesRaw.split(";;").toMutableList()
+                    val idx = editingEpIndex ?: -1
+                    if (idx in 0 until epList.size) {
+                        epList[idx] = "${updated.title}|${updated.streamUrl}|${updated.downloadUrl}|${updated.size}"
+                        episodesRaw = epList.joinToString(";;")
+                    }
+                    editingEpIndex = null
+                    editingEpItem = null
+                },
+                onDismiss = {
+                    editingEpIndex = null
+                    editingEpItem = null
+                }
+            )
+        }
     }
+}
+
+// -------------------------------------------------------------
+// 10. EPISODE EDIT DIALOG (FOR ANIME & SERIES)
+// -------------------------------------------------------------
+@Composable
+fun EpisodeEditDialog(
+    initialEpisode: EpisodeItem,
+    index: Int,
+    onSave: (EpisodeItem) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var title by remember { mutableStateOf(initialEpisode.title) }
+    var streamUrl by remember { mutableStateOf(initialEpisode.streamUrl) }
+    var downloadUrl by remember { mutableStateOf(initialEpisode.downloadUrl) }
+    var size by remember { mutableStateOf(initialEpisode.size) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Edit Episode #${index + 1}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Episode Title *") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = GoldAccent,
+                        unfocusedBorderColor = BorderDark
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = streamUrl,
+                    onValueChange = { streamUrl = it },
+                    label = { Text("Stream URL (BunnyStream / MP4 / HLS)") },
+                    placeholder = { Text("https://... or Bunny player embed") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = GoldAccent,
+                        unfocusedBorderColor = BorderDark
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = downloadUrl,
+                    onValueChange = { downloadUrl = it },
+                    label = { Text("Download Link") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = GoldAccent,
+                        unfocusedBorderColor = BorderDark
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = size,
+                    onValueChange = { size = it },
+                    label = { Text("File Size (e.g. 450 MB)") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = GoldAccent,
+                        unfocusedBorderColor = BorderDark
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (title.isNotBlank()) {
+                        val cleanedStream = cleanStreamUrl(streamUrl)
+                        val cleanedDl = if (downloadUrl.isNotBlank()) cleanStreamUrl(downloadUrl) else cleanedStream
+                        onSave(
+                            EpisodeItem(
+                                title = title.trim(),
+                                streamUrl = cleanedStream,
+                                downloadUrl = cleanedDl,
+                                size = if (size.isNotBlank()) size.trim() else "350 MB"
+                            )
+                        )
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = GoldAccent)
+            ) {
+                Text("UPDATE EPISODE", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCEL", color = Color.Gray)
+            }
+        },
+        containerColor = Color(0xFF1E1E1E),
+        shape = RoundedCornerShape(12.dp)
+    )
 }

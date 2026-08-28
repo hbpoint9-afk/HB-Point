@@ -325,49 +325,74 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Cinematic custom sound synthesizer for launch
+    // Cinematic custom sound synthesizer for launch (Loud, Crystal-Clear & Resonant)
     fun playLaunchSound() {
         if (_isMuted.value) return
         Thread {
             try {
                 val sampleRate = 44100
-                val duration = 2.0 // 2 seconds
+                val duration = 2.2 // 2.2 seconds
                 val numSamples = (duration * sampleRate).toInt()
                 val sample = DoubleArray(numSamples)
 
                 for (i in 0 until numSamples) {
                     val t = i.toDouble() / sampleRate
 
-                    // Low cinematic bass sweep: 50Hz sweeps up to 130Hz
-                    val freqBass = 50.0 + (80.0 * (t / duration))
-                    val bass = Math.sin(2.0 * Math.PI * freqBass * t) * 0.45
+                    // 1. Crisp Opening Strike & Whoosh (t: 0 -> 0.45s)
+                    var strike = 0.0
+                    if (t < 0.45) {
+                        val strikeEnv = Math.exp(-t * 9.0)
+                        val strikeFreq = 650.0 * Math.exp(-t * 8.0) + 180.0
+                        strike = Math.sin(2.0 * Math.PI * strikeFreq * t) * 0.45 * strikeEnv
+                        // High sparkle shimmer
+                        strike += Math.sin(2.0 * Math.PI * 1800.0 * t) * 0.12 * strikeEnv
+                    }
 
-                    // Harmonic chord swells after 0.4s
+                    // 2. Punchy Mid & Warm Bass (audible on both phone speakers & earphones)
+                    val bassFreq = 90.0 + 35.0 * Math.exp(-t * 3.0)
+                    val bassEnv = if (t < 0.08) t / 0.08 else Math.exp(-(t - 0.08) * 1.2)
+                    val bass = (Math.sin(2.0 * Math.PI * bassFreq * t) * 0.55 +
+                               Math.sin(2.0 * Math.PI * (bassFreq * 2.0) * t) * 0.35) * bassEnv
+
+                    // 3. Cinematic Majestic Chord Swell (t: 0.15 -> 2.2s)
                     var chord = 0.0
-                    if (t > 0.4) {
-                        val swellFactor = Math.sin(Math.PI * (t - 0.4) / (duration - 0.4))
-                        // Low warm minor/suspended chord (C - Eb - G)
-                        chord += Math.sin(2.0 * Math.PI * 130.81 * t) * 0.20 // C3
-                        chord += Math.sin(2.0 * Math.PI * 155.56 * t) * 0.15 // Eb3
-                        chord += Math.sin(2.0 * Math.PI * 196.00 * t) * 0.12 // G3
-                        chord += Math.sin(2.0 * Math.PI * 261.63 * t) * 0.08 // C4
-                        chord *= swellFactor
+                    if (t > 0.12) {
+                        val chordTime = t - 0.12
+                        val swell = if (chordTime < 0.35) {
+                            chordTime / 0.35
+                        } else {
+                            Math.exp(-(chordTime - 0.35) * 1.4)
+                        }
+
+                        // Rich layered harmonic chord: C3 (130.8Hz), G3 (196.0Hz), C4 (261.6Hz), E4 (329.6Hz), G4 (392.0Hz), C5 (523.25Hz)
+                        val c3 = Math.sin(2.0 * Math.PI * 130.81 * t) * 0.35
+                        val g3 = Math.sin(2.0 * Math.PI * 196.00 * t) * 0.30
+                        val c4 = Math.sin(2.0 * Math.PI * 261.63 * t) * 0.35
+                        val e4 = Math.sin(2.0 * Math.PI * 329.63 * t) * 0.28
+                        val g4 = Math.sin(2.0 * Math.PI * 392.00 * t) * 0.22
+                        val c5 = Math.sin(2.0 * Math.PI * 523.25 * t) * 0.15
+
+                        chord = (c3 + g3 + c4 + e4 + g4 + c5) * swell
                     }
 
-                    // Master envelope
-                    val envelope = if (t < 0.15) {
-                        t / 0.15
-                    } else if (t > duration - 0.3) {
-                        (duration - t) / 0.3
-                    } else {
-                        1.0
-                    }
-                    sample[i] = (bass + chord) * envelope
+                    // Master output sum
+                    sample[i] = strike + bass + chord
+                }
+
+                // Find peak for full normalization to maximize loudness without clipping
+                var maxPeak = 0.0001
+                for (s in sample) {
+                    val abs = Math.abs(s)
+                    if (abs > maxPeak) maxPeak = abs
                 }
 
                 val buffer = ShortArray(numSamples)
+                val targetMax = 31500.0 // Near max 16-bit PCM for loud, clear volume
+                val scale = targetMax / maxPeak
+
                 for (i in 0 until numSamples) {
-                    buffer[i] = (sample[i] * 32767).toInt().toShort()
+                    val normalized = (sample[i] * scale).coerceIn(-32767.0, 32767.0)
+                    buffer[i] = normalized.toInt().toShort()
                 }
 
                 val audioTrack = android.media.AudioTrack(
@@ -378,6 +403,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     buffer.size * 2,
                     android.media.AudioTrack.MODE_STATIC
                 )
+                audioTrack.setVolume(1.0f)
                 audioTrack.write(buffer, 0, buffer.size)
                 audioTrack.play()
                 Thread.sleep((duration * 1000).toLong())
