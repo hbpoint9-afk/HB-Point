@@ -162,7 +162,7 @@ class MediaRepository(
                     fileSize = "1.4 GB"
                 ),
                 MediaItem(
-                    title = "Cyber Ronin 2099",
+                    title = "Cyber Rin: Ronin 2099",
                     type = "Anime",
                     backdropUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80",
                     posterUrl = "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=400&q=80",
@@ -171,13 +171,13 @@ class MediaRepository(
                     releaseYear = "2026",
                     category = "Anime",
                     cast = "Kenji Sato, Aoi Miyamoto, Kuro",
-                    trailerLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                    trailerLink = "https://player.mediadelivery.net/play/738595/f80feb1d-e6ab-4c25-94a5-2aac0ff7afb8",
                     isTrending = true,
                     isRecentlyAdded = true,
-                    streamServers = "Server 1 AnimeFast|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                    downloadLink = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                    streamServers = "Server 1 Ultra HD|https://player.mediadelivery.net/play/738595/f80feb1d-e6ab-4c25-94a5-2aac0ff7afb8;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                    downloadLink = "https://player.mediadelivery.net/play/738595/f80feb1d-e6ab-4c25-94a5-2aac0ff7afb8",
                     fileSize = "1.9 GB",
-                    episodes = "Episode 1: The Plasma Katana|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4|400 MB;;Episode 2: Syndicate Matrix|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|410 MB"
+                    episodes = "Episode 1: The Plasma Katana|https://player.mediadelivery.net/play/738595/f80feb1d-e6ab-4c25-94a5-2aac0ff7afb8|https://player.mediadelivery.net/play/738595/f80feb1d-e6ab-4c25-94a5-2aac0ff7afb8|400 MB;;Episode 2: Syndicate Matrix|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|410 MB"
                 ),
                 MediaItem(
                     title = "Chronicles of Neon",
@@ -216,6 +216,20 @@ class MediaRepository(
                 )
             )
             mediaDao.insertAllMedia(startingItems)
+        } else {
+            // Update existing Cyber Rin item if present or add if missing
+            val cyberRinUrl = "https://player.mediadelivery.net/play/738595/f80feb1d-e6ab-4c25-94a5-2aac0ff7afb8"
+            val cyberItem = existing.find { it.title.contains("Cyber", ignoreCase = true) || it.title.contains("Rin", ignoreCase = true) }
+            if (cyberItem != null) {
+                val updated = cyberItem.copy(
+                    title = "Cyber Rin: Ronin 2099",
+                    streamServers = "Server 1 Ultra HD|$cyberRinUrl;;Server 2 Firedrop|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                    downloadLink = cyberRinUrl,
+                    trailerLink = cyberRinUrl,
+                    episodes = "Episode 1: The Plasma Katana|$cyberRinUrl|$cyberRinUrl|400 MB;;Episode 2: Syndicate Matrix|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4|410 MB"
+                )
+                mediaDao.updateMedia(updated)
+            }
         }
     }
 

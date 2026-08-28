@@ -3,8 +3,6 @@ package com.example.ui
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
-import android.widget.MediaController
-import android.widget.VideoView
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -1262,6 +1260,7 @@ fun PlayerOverlay(
     val isAdmin by viewModel.preferences.isAdmin
 
     var screenRatioMode by remember { mutableStateOf("FIT") }
+    var isFullscreen by remember { mutableStateOf(false) }
     var showGestureIndicator by remember { mutableStateOf("") }
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -1273,148 +1272,105 @@ fun PlayerOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .statusBarsPadding()
-            .navigationBarsPadding()
+            .then(
+                if (!isFullscreen) {
+                    Modifier
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                } else Modifier
+            )
             .testTag("player_overlay")
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Player Top Header Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.8f))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+        if (isFullscreen) {
+            // Fullscreen player taking 100% of the screen
+            UniversalStreamingPlayer(
+                rawUrl = currentUrl,
+                title = media.title,
+                modifier = Modifier.fillMaxSize(),
+                screenRatioMode = screenRatioMode,
+                isFullscreen = true,
+                onToggleFullscreen = { isFullscreen = false },
+                onToggleRatio = {
+                    screenRatioMode = when (screenRatioMode) {
+                        "FIT" -> "FILL"
+                        "FILL" -> "STRETCH"
+                        else -> "FIT"
+                    }
+                }
+            )
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Player Top Header Bar
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.8f))
+                        .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close player", tint = Color.White)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        IconButton(onClick = onClose) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close player", tint = Color.White)
+                        }
+                        Column {
+                            Text(media.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${media.type} • ${media.category}", fontSize = 10.sp, color = Color.Gray)
+                        }
                     }
-                    Column {
-                        Text(media.title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("${media.type} • ${media.category}", fontSize = 10.sp, color = Color.Gray)
-                    }
-                }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    // Admin Quick Edit Button
-                    if (isAdmin) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // Admin Quick Edit Button
+                        if (isAdmin) {
+                            IconButton(
+                                onClick = { showEditDialog = true },
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(GoldAccent.copy(alpha = 0.2f))
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = "Admin Edit Media", tint = GoldAccent, modifier = Modifier.size(20.dp))
+                            }
+                        }
+
+                        // Aspect Ratio Button
                         IconButton(
-                            onClick = { showEditDialog = true },
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(GoldAccent.copy(alpha = 0.2f))
+                            onClick = {
+                                screenRatioMode = when (screenRatioMode) {
+                                    "FIT" -> "FILL"
+                                    "FILL" -> "STRETCH"
+                                    else -> "FIT"
+                                }
+                            }
                         ) {
-                            Icon(Icons.Default.Edit, contentDescription = "Admin Edit Media", tint = GoldAccent, modifier = Modifier.size(20.dp))
-                        }
-                    }
-
-                    // Aspect Ratio Button
-                    IconButton(
-                        onClick = {
-                            screenRatioMode = when (screenRatioMode) {
-                                "FIT" -> "FILL"
-                                "FILL" -> "STRETCH"
-                                else -> "FIT"
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Default.AspectRatio, contentDescription = "Aspect Ratio Toggle", tint = Color.White)
-                    }
-                }
-            }
-
-            // Video Player Container Frame
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(230.dp)
-                    .background(Color(0xFF070707))
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onDoubleTap = { offset ->
-                                val halfWidth = size.width / 2
-                                showGestureIndicator = if (offset.x < halfWidth) "-10s" else "+10s"
-                            }
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                if (currentUrl.isNotBlank()) {
-                    AndroidView(
-                        factory = { ctx ->
-                            VideoView(ctx).apply {
-                                val mediaController = MediaController(ctx)
-                                mediaController.setAnchorView(this)
-                                setMediaController(mediaController)
-                                setVideoPath(currentUrl)
-                                setOnPreparedListener {
-                                    start()
-                                }
-                            }
-                        },
-                        update = { view ->
-                            if (view.tag != currentUrl) {
-                                view.setVideoPath(currentUrl)
-                                view.tag = currentUrl
-                                view.start()
-                            }
-                            when (screenRatioMode) {
-                                "FIT" -> {
-                                    view.scaleX = 1.0f
-                                    view.scaleY = 1.0f
-                                }
-                                "FILL" -> {
-                                    view.scaleX = 1.2f
-                                    view.scaleY = 1.2f
-                                }
-                                "STRETCH" -> {
-                                    view.scaleX = 1.4f
-                                    view.scaleY = 1.0f
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = NeonRed)
-                    }
-                }
-
-                // 10s Gesture HUD
-                if (showGestureIndicator.isNotEmpty()) {
-                    LaunchedEffect(showGestureIndicator) {
-                        delay(600)
-                        showGestureIndicator = ""
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(32.dp))
-                            .background(Color.Black.copy(alpha = 0.8f))
-                            .padding(horizontal = 20.dp, vertical = 10.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (showGestureIndicator == "-10s") Icons.Default.Replay10 else Icons.Default.Forward10,
-                                contentDescription = "Fast forward",
-                                tint = NeonRed
-                            )
-                            Text(showGestureIndicator, color = Color.White, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.AspectRatio, contentDescription = "Aspect Ratio Toggle", tint = Color.White)
                         }
                     }
                 }
-            }
 
-            // Media Detail, Stream Mirror Selectors, Episode List & Download Action
+                // Universal Video Player Container Frame (ExoPlayer + BunnyStream & Embed HTML5 Web Engine)
+                UniversalStreamingPlayer(
+                    rawUrl = currentUrl,
+                    title = media.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(230.dp),
+                    screenRatioMode = screenRatioMode,
+                    isFullscreen = false,
+                    onToggleFullscreen = { isFullscreen = true },
+                    onToggleRatio = {
+                        screenRatioMode = when (screenRatioMode) {
+                            "FIT" -> "FILL"
+                            "FILL" -> "STRETCH"
+                            else -> "FIT"
+                        }
+                    }
+                )
+
+                // Media Detail, Stream Mirror Selectors, Episode List & Download Action
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1684,16 +1640,17 @@ fun PlayerOverlay(
                 }
             }
         }
-
-        // Admin Edit Media Dialog
-        if (showEditDialog) {
-            MediaEditorDialog(
-                viewModel = viewModel,
-                initialMedia = media,
-                onDismiss = { showEditDialog = false }
-            )
-        }
     }
+
+    // Admin Edit Media Dialog
+    if (showEditDialog) {
+        MediaEditorDialog(
+            viewModel = viewModel,
+            initialMedia = media,
+            onDismiss = { showEditDialog = false }
+        )
+    }
+}
 }
 
 // -------------------------------------------------------------
@@ -2394,9 +2351,11 @@ fun MediaEditorDialog(
                                 return@Button
                             }
 
+                            val s1 = cleanStreamUrl(streamLink1)
+                            val s2 = cleanStreamUrl(streamLink2)
                             val servers = mutableListOf<String>()
-                            if (streamLink1.isNotBlank()) servers.add("Server 1 BollyFast|$streamLink1")
-                            if (streamLink2.isNotBlank()) servers.add("Server 2 Firedrop|$streamLink2")
+                            if (s1.isNotBlank()) servers.add("Server 1 BollyFast|$s1")
+                            if (s2.isNotBlank()) servers.add("Server 2 Firedrop|$s2")
                             val serversSerialized = servers.joinToString(";;")
 
                             viewModel.saveMedia(
@@ -2412,7 +2371,7 @@ fun MediaEditorDialog(
                                 cast = cast,
                                 trailer = trailerLink,
                                 streamServers = serversSerialized,
-                                downloadLink = if (downloadLink.isNotBlank()) downloadLink else streamLink1,
+                                downloadLink = if (downloadLink.isNotBlank()) cleanStreamUrl(downloadLink) else s1,
                                 fileSize = fileSize,
                                 episodes = episodesRaw,
                                 isTrending = initialMedia?.isTrending ?: true,
@@ -2662,8 +2621,8 @@ fun MediaEditorDialog(
                                 Button(
                                     onClick = {
                                         if (newEpTitle.isNotBlank()) {
-                                            val stream = if (newEpStream.isNotBlank()) newEpStream else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
-                                            val dl = if (newEpDownload.isNotBlank()) newEpDownload else stream
+                                            val stream = if (newEpStream.isNotBlank()) cleanStreamUrl(newEpStream) else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+                                            val dl = if (newEpDownload.isNotBlank()) cleanStreamUrl(newEpDownload) else stream
                                             val newEntry = "${newEpTitle.trim()}|$stream|$dl|${newEpSize.trim()}"
                                             episodesRaw = if (episodesRaw.isBlank()) newEntry else "$episodesRaw;;$newEntry"
                                             newEpTitle = ""
